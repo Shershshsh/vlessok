@@ -27,3 +27,7 @@ src-tauri/target
 *.sln
 *.sw?
 .DS_Store
+
+# sing-box binary (download manually, see README)
+src-tauri/binaries/sing-box.exe
+src-tauri/binaries/*.exe
