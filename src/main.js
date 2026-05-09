@@ -143,7 +143,7 @@ async function handleConnect() {
     if (result === 'connected') {
       setConnected();
       addLog('✅ sing-box запущен. Прокси доступен на 127.0.0.1:10808', 'success');
-      addLog('📡 Для теста: curl --socks5 127.0.0.1:10808 https://ifconfig.me', 'info');
+      addLog('⚠ Этап 2: только локальный SOCKS5-прокси. Системный трафик ещё не идёт через VPN. Полный режим TUN будет добавлен на следующем этапе.', 'info');
     }
   } catch (err) {
     // Rust вернул ошибку — показываем её

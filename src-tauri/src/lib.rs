@@ -9,11 +9,12 @@
 
 // Подключаем наши модули
 mod config;   // Парсер VLESS URL → sing-box JSON
+mod platform; // OS-специфичные утилиты (Job Objects)
 mod singbox;  // Управление процессом sing-box
 
 use singbox::SingBoxManager;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State};
 
 // ============================================================
 // Тип для глобального состояния — менеджер sing-box
@@ -103,6 +104,15 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Обработка закрытия окна (Уровень 1 защиты)
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                log::info!("Окно закрывается, останавливаем sing-box...");
+                if let Ok(manager) = window.state::<AppState>().inner().manager.lock() {
+                    let _ = manager.stop();
+                }
+            }
+        })
         // Регистрируем глобальное состояние
         .manage(app_state)
         // Регистрируем команды — все три должны быть здесь

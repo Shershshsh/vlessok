@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use log::{error, info, warn};
+use crate::platform::windows::ProcessJob;
 
 /// Хранит состояние запущенного sing-box процесса.
 /// Arc<Mutex<...>> позволяет безопасно передавать между потоками.
@@ -23,14 +24,22 @@ pub struct SingBoxManager {
     process: Arc<Mutex<Option<Child>>>,
     /// Путь к временному файлу конфига (нужен чтобы удалить после остановки)
     config_path: Arc<Mutex<Option<PathBuf>>>,
+    /// Job Object для гарантии убиения дочернего процесса при смерти vlessok (для Windows)
+    job: Arc<Mutex<Option<ProcessJob>>>,
 }
 
 impl SingBoxManager {
-    /// Создаёт новый менеджер.
+    /// Создаёт новый менеджер и инициализирует глобальный Job Object
     pub fn new() -> Self {
+        // Создаем Job Object (будет создан только один раз для менеджера)
+        let job = ProcessJob::new().map_err(|e| {
+            warn!("Не удалось создать Job Object: {}", e);
+        }).ok();
+
         SingBoxManager {
             process: Arc::new(Mutex::new(None)),
             config_path: Arc::new(Mutex::new(None)),
+            job: Arc::new(Mutex::new(job)),
         }
     }
 
@@ -129,6 +138,15 @@ impl SingBoxManager {
         // Запускаем процесс
         let mut child = cmd.spawn()
             .map_err(|e| format!("Не удалось запустить sing-box: {}", e))?;
+
+        // Привязываем к Job Object СРАЗУ ПОСЛЕ ЗАПУСКА (Уровень 2 защиты)
+        if let Some(job) = self.job.lock().unwrap().as_ref() {
+            if let Err(e) = job.assign_process(&child) {
+                warn!("Не удалось привязать sing-box к Job Object: {}", e);
+            } else {
+                info!("Процесс sing-box успешно привязан к Job Object");
+            }
+        }
 
         // Перехватываем stdout и stderr в фоновые потоки для логирования
         if let Some(stdout) = child.stdout.take() {
