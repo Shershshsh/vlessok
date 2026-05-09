@@ -1,0 +1,29 @@
+# Логи
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Зависимости
+node_modules
+
+# Сборка
+dist
+dist-ssr
+*.local
+
+# Rust (компиляция)
+src-tauri/target
+
+# Редакторы
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store

@@ -1,0 +1,144 @@
+/* ============================================================
+   styles.css — Стили приложения vlessok
+   ============================================================
+   Сейчас минимальные стили только для каркаса.
+   В будущих этапах здесь будет полноценный дизайн.
+   ============================================================ */
+
+/* --- Сброс и базовые стили --- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* Шрифт — системный, быстрый, без подгрузки */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, 
+               "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+
+  /* Цвета — тёмная тема по умолчанию (типично для VPN-клиентов) */
+  --bg-color: #1a1a2e;
+  --text-color: #e0e0e0;
+  --text-muted: #888;
+  --accent-color: #4ecca3;
+  --accent-hover: #3dbb91;
+  --btn-bg: #16213e;
+  --btn-border: #4ecca3;
+  --success-color: #4ecca3;
+  --divider-color: #2a2a4a;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  min-height: 100vh;
+  /* Убираем возможность выделять текст (десктопное приложение) */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* --- Главный контейнер --- */
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* --- Заголовок --- */
+.app-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--accent-color);
+  letter-spacing: 2px;
+  margin-bottom: 0.25rem;
+}
+
+.app-subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+/* --- Разделитель --- */
+.divider {
+  width: 60%;
+  border: none;
+  border-top: 1px solid var(--divider-color);
+  margin-bottom: 2rem;
+}
+
+/* --- Секция тестирования --- */
+.test-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.test-description {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  max-width: 300px;
+}
+
+/* --- Кнопка --- */
+button {
+  background-color: var(--btn-bg);
+  color: var(--accent-color);
+  border: 1px solid var(--btn-border);
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+button:hover {
+  background-color: var(--accent-color);
+  color: var(--bg-color);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(78, 204, 163, 0.3);
+}
+
+button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- Сообщение с результатом --- */
+.result-msg {
+  font-size: 0.95rem;
+  min-height: 1.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.result-msg.success {
+  color: var(--success-color);
+  background-color: rgba(78, 204, 163, 0.1);
+  border: 1px solid rgba(78, 204, 163, 0.2);
+}
+
+.result-msg.error {
+  color: #e74c3c;
+  background-color: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.2);
+}
+
+/* --- Подвал --- */
+.app-footer {
+  position: fixed;
+  bottom: 1rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
