@@ -143,6 +143,13 @@ pub fn vless_url_to_singbox_config(raw_url: &str, mode: ConnectionMode) -> Resul
         vless_outbound["flow"] = json!(flow_value);
     }
 
+    // domain_resolver нужен только в TUN: в Mixed-режиме DNS-блока с "local-dns" нет
+    let direct_outbound = if mode == ConnectionMode::Tun {
+        json!({ "type": "direct", "tag": "direct", "domain_resolver": "local-dns" })
+    } else {
+        json!({ "type": "direct", "tag": "direct" })
+    };
+
     // Базовый конфиг (одинаковый для всех режимов)
     let mut config = json!({
         "log": {
@@ -150,11 +157,7 @@ pub fn vless_url_to_singbox_config(raw_url: &str, mode: ConnectionMode) -> Resul
         },
         "outbounds": [
             vless_outbound,
-            {
-                "type": "direct",
-                "tag": "direct",
-                "domain_resolver": "local-dns"
-            },
+            direct_outbound,
             {
                 "type": "block",
                 "tag": "block"

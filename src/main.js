@@ -260,6 +260,16 @@ window.addEventListener('DOMContentLoaded', () => {
     statusText     = document.querySelector('#status-text');
     logOutput      = document.querySelector('#log-output');
     btnClearLog    = document.querySelector('#btn-clear-log');
+
+    // ФИКС 2: восстанавливаем последний VLESS URL из localStorage
+    if (vlessUrlInput) {
+      const lastUrl = localStorage.getItem('vlessok_last_url');
+      if (lastUrl) vlessUrlInput.value = lastUrl;
+      // Автосохраняем при любом изменении (временное решение до Этапа 4)
+      vlessUrlInput.addEventListener('input', () => {
+        localStorage.setItem('vlessok_last_url', vlessUrlInput.value);
+      });
+    }
     
     modeTunRadio   = document.querySelector('#mode-tun');
     modeSocksRadio = document.querySelector('#mode-socks');

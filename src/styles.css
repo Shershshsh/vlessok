@@ -46,8 +46,8 @@ body {
 .container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px 18px;
+  gap: 12px;
+  padding: 16px 16px;
   min-height: 100vh;
 }
 
