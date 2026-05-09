@@ -89,6 +89,17 @@ impl SingBoxManager {
         // Резолвим путь к бинарнику
         let binary_path = Self::resolve_binary_path()?;
 
+        // Проверяем наличие wintun.dll рядом с sing-box.exe (требуется для TUN)
+        if let Some(exe_dir) = binary_path.parent() {
+            let wintun_path = exe_dir.join("wintun.dll");
+            if !wintun_path.exists() {
+                return Err(format!(
+                    "Файл wintun.dll не найден по пути: {}. Он необходим для работы VPN. Пожалуйста, переустановите приложение.",
+                    wintun_path.display()
+                ));
+            }
+        }
+
         // Записываем конфиг во временный файл
         // tempfile создаёт файл в системной TEMP-директории
         let config_file = tempfile::Builder::new()

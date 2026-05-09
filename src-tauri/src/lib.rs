@@ -34,12 +34,19 @@ struct AppState {
 #[tauri::command]
 fn connect_vless(
     url: String,
+    mode: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    log::info!("Получена команда connect_vless");
+    log::info!("Получена команда connect_vless (режим: {})", mode);
+
+    let conn_mode = if mode == "tun" {
+        config::ConnectionMode::Tun
+    } else {
+        config::ConnectionMode::Mixed
+    };
 
     // Шаг 1: Парсим VLESS-URL и генерируем JSON-конфиг
-    let config_json = config::vless_url_to_singbox_config(&url)
+    let config_json = config::vless_url_to_singbox_config(&url, conn_mode)
         .map_err(|e| format!("Ошибка парсинга URL: {}", e))?;
 
     log::info!("Конфиг sing-box сгенерирован");
@@ -81,6 +88,96 @@ fn is_connected(state: State<'_, AppState>) -> bool {
     manager.is_running()
 }
 
+#[tauri::command]
+fn is_admin() -> bool {
+    crate::platform::windows::is_elevated()
+}
+
+#[tauri::command]
+fn relaunch_as_admin() -> Result<(), String> {
+    log::info!("Перезапуск с правами администратора...");
+    let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    
+    // Запускаем через PowerShell с запросом UAC
+    let status = std::process::Command::new("powershell")
+        .arg("-Command")
+        .arg(format!("Start-Process '{}' -Verb RunAs", exe_path.display()))
+        .status()
+        .map_err(|e| format!("Ошибка при вызове PowerShell: {}", e))?;
+    
+    if status.success() {
+        std::process::exit(0);
+    }
+    Err("Пользователь отменил запрос прав или произошла ошибка".to_string())
+}
+
+#[tauri::command]
+fn apply_dns_leak_fix() -> Result<(), String> {
+    log::info!("Применяю защиту от DNS-leak...");
+    let script = r#"
+        Set-DnsClientGlobalSetting -SuffixSearchList @()
+        reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v DisableSmartNameResolution /t REG_DWORD /d 1 /f
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v DisableParallelAandAAAA /t REG_DWORD /d 1 /f
+    "#;
+    let status = std::process::Command::new("powershell")
+        .arg("-Command")
+        .arg(script)
+        .status()
+        .map_err(|e| format!("Ошибка PowerShell: {}", e))?;
+    
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Не удалось применить настройки DNS. Нужны права администратора.".to_string())
+    }
+}
+
+#[tauri::command]
+fn reset_network() -> Result<String, String> {
+    log::info!("Сброс сетевых настроек...");
+    
+    // 1. Удаляем TUN-интерфейс
+    let _ = std::process::Command::new("netsh")
+        .args(["interface", "delete", "name=vlessok-tun"])
+        .status();
+
+    // 2. Отменяем изменения DNS и сбрасываем кэш
+    let script = r#"
+        Set-DnsClientGlobalSetting -ResetServerAddresses
+        reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v DisableSmartNameResolution /f
+        reg delete "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v DisableParallelAandAAAA /f
+        ipconfig /flushdns
+    "#;
+
+    let _ = std::process::Command::new("powershell")
+        .arg("-Command")
+        .arg(script)
+        .status();
+
+    Ok("Сеть успешно сброшена.".to_string())
+}
+
+#[tauri::command]
+fn get_current_external_ip() -> Result<String, String> {
+    let timeout = std::time::Duration::from_secs(3);
+    
+    // Основной сервис api.ipify.org
+    if let Ok(response) = ureq::get("https://api.ipify.org").timeout(timeout).call() {
+        if let Ok(text) = response.into_string() {
+            return Ok(text.trim().to_string());
+        }
+    }
+    
+    // Резервный сервис ifconfig.me
+    if let Ok(response) = ureq::get("https://ifconfig.me").timeout(timeout).call() {
+        if let Ok(text) = response.into_string() {
+            return Ok(text.trim().to_string());
+        }
+    }
+    
+    Err("Не удалось определить IP".to_string())
+}
+
 // ============================================================
 // Точка запуска приложения
 // ============================================================
@@ -96,6 +193,11 @@ pub fn run() {
     ).init();
 
     log::info!("vlessok запускается...");
+
+    // Очистка зависшего TUN-интерфейса при старте
+    let _ = std::process::Command::new("netsh")
+        .args(["interface", "delete", "name=vlessok-tun"])
+        .output(); // Используем output чтобы не выводить в консоль если ошибка (например, интерфейса нет)
 
     // Создаём глобальное состояние приложения
     let app_state = AppState {
@@ -115,11 +217,16 @@ pub fn run() {
         })
         // Регистрируем глобальное состояние
         .manage(app_state)
-        // Регистрируем команды — все три должны быть здесь
+        // Регистрируем команды
         .invoke_handler(tauri::generate_handler![
             connect_vless,
             disconnect,
             is_connected,
+            is_admin,
+            relaunch_as_admin,
+            apply_dns_leak_fix,
+            reset_network,
+            get_current_external_ip,
         ])
         .run(tauri::generate_context!())
         .expect("Ошибка при запуске приложения vlessok");

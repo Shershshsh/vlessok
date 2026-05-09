@@ -31,6 +31,8 @@ tempfile = "3"
 log = "0.4"
 # env_logger — вывод логов в консоль (читает переменную RUST_LOG)
 env_logger = "0.11"
+# ureq — простой синхронный HTTP-клиент
+ureq = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # windows — вызов WinAPI для управления жизненным циклом процессов (Job Objects)

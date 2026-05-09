@@ -44,6 +44,39 @@
       </div>
 
       <!-- ====================================================== -->
+      <!-- РЕЖИМ ПОДКЛЮЧЕНИЯ И СТАТУС                            -->
+      <!-- ====================================================== -->
+      <div class="mode-selector">
+        <label class="input-label">Режим работы:</label>
+        <div class="mode-switch">
+          <label>
+            <input type="radio" id="mode-tun" name="vpn-mode" value="tun" checked>
+            <span>Системный VPN (TUN)</span>
+          </label>
+          <label>
+            <input type="radio" id="mode-socks" name="vpn-mode" value="socks">
+            <span>SOCKS5 (Прокси)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- ИНФО-БЛОК ПОДКЛЮЧЕНИЯ (Скрыт по умолчанию) -->
+      <div id="connection-info" class="connection-info hidden">
+        <div class="info-row">
+          <span class="info-label">Состояние:</span>
+          <span class="info-value status-protected">🟢 Защищён</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Внешний IP:</span>
+          <span id="external-ip" class="info-value">Загрузка...</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Сервер:</span>
+          <span id="server-name" class="info-value">...</span>
+        </div>
+      </div>
+
+      <!-- ====================================================== -->
       <!-- КНОПКИ УПРАВЛЕНИЯ                                     -->
       <!-- ====================================================== -->
       <div class="buttons-block">
@@ -69,12 +102,26 @@
         </div>
       </div>
 
-      <!-- Версия в подвале -->
       <div class="app-footer">
-        <p>Этап 2: SOCKS5-прокси · v0.2.0</p>
-        <p class="footer-hint">Прокси: 127.0.0.1:10808</p>
+        <p>Этап 3: TUN-режим · v0.3.0</p>
+        <div class="footer-actions">
+          <button id="btn-reset-network" class="btn-text">Сбросить настройки сети</button>
+        </div>
       </div>
 
     </main>
+
+    <!-- Скрытое модальное окно UAC -->
+    <div id="uac-modal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3>Требуются права администратора</h3>
+        <p>Для создания системного VPN-туннеля (режим TUN) приложению необходимы права администратора. Windows покажет запрос UAC.</p>
+        <div class="modal-actions">
+          <button id="btn-relaunch-admin" class="btn btn-connect">Перезапустить как Админ</button>
+          <button id="btn-use-socks" class="btn btn-disconnect">Использовать SOCKS5</button>
+          <button id="btn-cancel-modal" class="btn-text">Отмена</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

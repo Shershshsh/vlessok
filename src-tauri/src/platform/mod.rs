@@ -21,4 +21,8 @@ pub mod windows {
             Ok(())
         }
     }
+
+    pub fn is_elevated() -> bool {
+        false
+    }
 }

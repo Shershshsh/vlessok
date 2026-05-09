@@ -9,9 +9,16 @@
 use serde_json::{json, Value};
 use url::Url;
 
+/// Режим подключения: как именно sing-box перехватывает трафик
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionMode {
+    Mixed, // SOCKS5 + HTTP прокси на 127.0.0.1:10808
+    Tun,   // Полноценный системный VPN интерфейс (требует прав администратора)
+}
+
 /// Основная функция парсинга.
-/// Принимает VLESS URL-строку, возвращает JSON-строку или ошибку.
-pub fn vless_url_to_singbox_config(raw_url: &str) -> Result<String, String> {
+/// Принимает VLESS URL-строку и режим, возвращает JSON-строку или ошибку.
+pub fn vless_url_to_singbox_config(raw_url: &str, mode: ConnectionMode) -> Result<String, String> {
     // Обрезаем пробелы по краям — пользователь мог случайно скопировать с пробелом
     let raw_url = raw_url.trim();
 
@@ -136,48 +143,141 @@ pub fn vless_url_to_singbox_config(raw_url: &str) -> Result<String, String> {
         vless_outbound["flow"] = json!(flow_value);
     }
 
-    // Полный конфиг sing-box
-    let config: Value = json!({
-        // Уровень логирования: warn — только важные сообщения
-        // Можно поменять на "debug" если нужна диагностика
+    // Базовый конфиг (одинаковый для всех режимов)
+    let mut config = json!({
         "log": {
             "level": "warn"
         },
-        // Inbound (входящий): mixed-прокси слушает на 127.0.0.1:10808
-        // Принимает и SOCKS5 и HTTP — curl, браузеры, и т.п.
-        "inbounds": [
+        "outbounds": [
+            vless_outbound,
+            {
+                "type": "direct",
+                "tag": "direct",
+                "domain_resolver": "local-dns"
+            },
+            {
+                "type": "block",
+                "tag": "block"
+            }
+        ]
+    });
+
+    // Дополняем конфиг в зависимости от режима
+    if mode == ConnectionMode::Tun {
+        // Строим CIDR из адреса сервера (добавляем /32 если голый IP, иначе оставляем как есть)
+        // Если server — это домен, sing-box сам его зарезолвит для route_exclude_address
+        // Но route_exclude_address принимает только IP/CIDR. Поэтому мы добавляем правило
+        // в route.rules через ip_cidr + domain, что покрывает оба случая.
+        let server_cidr = if server.contains(':') {
+            // IPv6
+            format!("{}/128", server)
+        } else if server.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+            // IPv4 (начинается с цифры)
+            format!("{}/32", server)
+        } else {
+            // Домен — route_exclude_address не подходит, используем route rule с domain
+            String::new()
+        };
+        let is_ip = !server_cidr.is_empty();
+
+        let tun_inbound = if is_ip {
+            json!({
+                "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "vlessok-tun",
+                "address": ["172.19.0.1/30"],
+                "auto_route": true,
+                "strict_route": true,
+                "stack": "system",
+                "endpoint_independent_nat": false,
+                "mtu": 1500,
+                "route_exclude_address": [server_cidr]
+            })
+        } else {
+            json!({
+                "type": "tun",
+                "tag": "tun-in",
+                "interface_name": "vlessok-tun",
+                "address": ["172.19.0.1/30"],
+                "auto_route": true,
+                "strict_route": true,
+                "stack": "system",
+                "endpoint_independent_nat": false,
+                "mtu": 1500
+            })
+        };
+        config["inbounds"] = json!([tun_inbound]);
+        config["dns"] = json!({
+            "servers": [
+                {
+                    "type": "https",
+                    "tag": "remote-dns",
+                    "server": "1.1.1.1",
+                    "domain_resolver": "local-dns",
+                    "detour": "proxy"
+                },
+                {
+                    "type": "udp",
+                    "tag": "local-dns",
+                    "server": "1.1.1.1",
+                    "detour": "direct"
+                }
+            ],
+            "rules": [
+                { "domain_suffix": [".local"], "server": "local-dns" }
+            ],
+            "final": "remote-dns",
+            "strategy": "ipv4_only"
+        });
+        // Строим правила route с учётом типа адреса сервера
+        let mut route_rules = vec![
+            json!({ "action": "sniff", "sniffer": ["http", "tls", "quic"], "timeout": "100ms" }),
+            json!({ "protocol": "dns", "action": "hijack-dns" }),
+        ];
+
+        // Явный bypass для VLESS-сервера — предотвращает routing loop
+        if is_ip {
+            // IP-адрес: правило через ip_cidr
+            route_rules.push(json!({
+                "ip_cidr": [format!("{}/32", server)],
+                "outbound": "direct"
+            }));
+        } else {
+            // Домен: правило через domain
+            route_rules.push(json!({
+                "domain": [server],
+                "outbound": "direct"
+            }));
+        }
+
+        // Приватные адреса тоже идут через direct
+        route_rules.push(json!({ "ip_is_private": true, "outbound": "direct" }));
+
+        config["route"] = json!({
+            "auto_detect_interface": true,
+            "rules": route_rules,
+            "final": "proxy"
+        });
+    } else {
+        // Режим Mixed (SOCKS5/HTTP прокси)
+        config["inbounds"] = json!([
             {
                 "type": "mixed",
                 "tag": "mixed-in",
                 "listen": "127.0.0.1",
                 "listen_port": 10808
             }
-        ],
-        // Outbound (исходящий): VLESS + два служебных (direct и block)
-        "outbounds": [
-            vless_outbound,
-            {
-                "type": "direct",
-                "tag": "direct"
-            },
-            {
-                "type": "block",
-                "tag": "block"
-            }
-        ],
-        // Маршрутизация: локальный трафик идёт напрямую, остальное через прокси
-        "route": {
+        ]);
+        config["route"] = json!({
             "rules": [
                 {
-                    // Приватные IP (192.168.x.x, 10.x.x.x, и т.п.) — напрямую
                     "ip_is_private": true,
                     "outbound": "direct"
                 }
             ],
-            // Всё остальное — через VLESS-прокси
             "final": "proxy"
-        }
-    });
+        });
+    }
 
     // Сериализуем в красиво отформатированный JSON (с отступами)
     serde_json::to_string_pretty(&config)
@@ -242,19 +342,19 @@ mod tests {
 
     #[test]
     fn test_valid_url_parses_ok() {
-        let result = vless_url_to_singbox_config(TEST_URL);
+        let result = vless_url_to_singbox_config(TEST_URL, ConnectionMode::Mixed);
         assert!(result.is_ok(), "Парсинг валидного URL должен успешно работать");
     }
 
     #[test]
     fn test_json_contains_server() {
-        let json_str = vless_url_to_singbox_config(TEST_URL).unwrap();
+        let json_str = vless_url_to_singbox_config(TEST_URL, ConnectionMode::Mixed).unwrap();
         assert!(json_str.contains("192.168.1.1"), "JSON должен содержать адрес сервера");
     }
 
     #[test]
     fn test_json_contains_flow() {
-        let json_str = vless_url_to_singbox_config(TEST_URL).unwrap();
+        let json_str = vless_url_to_singbox_config(TEST_URL, ConnectionMode::Mixed).unwrap();
         assert!(json_str.contains("xtls-rprx-vision"), "JSON должен содержать flow");
     }
 
@@ -262,14 +362,14 @@ mod tests {
     fn test_missing_sni_returns_error() {
         let url_without_sni = "vless://550e8400-e29b-41d4-a716-446655440000@1.2.3.4:443\
             ?security=reality&pbk=key123";
-        let result = vless_url_to_singbox_config(url_without_sni);
+        let result = vless_url_to_singbox_config(url_without_sni, ConnectionMode::Mixed);
         assert!(result.is_err(), "URL без SNI должен возвращать ошибку");
     }
 
     #[test]
     fn test_invalid_uuid_returns_error() {
         let bad_url = "vless://not-a-uuid@1.2.3.4:443?sni=x.com&pbk=key";
-        let result = vless_url_to_singbox_config(bad_url);
+        let result = vless_url_to_singbox_config(bad_url, ConnectionMode::Mixed);
         assert!(result.is_err(), "URL с невалидным UUID должен возвращать ошибку");
     }
 }
