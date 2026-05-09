@@ -5,9 +5,6 @@ description = "Минималистичный VPN-клиент для VLESS+Real
 authors = ["shershshsh"]
 edition = "2021"
 
-# Подробнее о полях Cargo.toml:
-# https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 # Суффикс _lib нужен чтобы имя библиотеки не конфликтовало с именем бинарника.
 # Это особенность Windows, см. https://github.com/rust-lang/cargo/issues/8519
@@ -23,6 +20,14 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 # tauri-plugin-opener — плагин для открытия ссылок в системном браузере
 tauri-plugin-opener = "2"
-# serde — библиотека для сериализации/десериализации данных (JSON и др.)
+# serde — сериализация/десериализация (нужна для генерации JSON-конфига sing-box)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# url — парсинг VLESS-ссылок (vless://uuid@server:port?params#remark)
+url = "2"
+# tempfile — создание временных файлов для конфига sing-box
+tempfile = "3"
+# log — стандартный интерфейс логирования для Rust
+log = "0.4"
+# env_logger — вывод логов в консоль (читает переменную RUST_LOG)
+env_logger = "0.11"

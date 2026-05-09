@@ -4,48 +4,76 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>vlessok</title>
-
-    <!-- Подключаем стили -->
     <link rel="stylesheet" href="styles.css" />
-
-    <!-- Подключаем JavaScript (defer = загрузить после HTML) -->
     <script type="module" src="/main.js" defer></script>
   </head>
 
   <body>
-    <!-- ============================================ -->
-    <!-- Главный контейнер приложения                 -->
-    <!-- Сейчас это просто каркас для тестирования.   -->
-    <!-- В следующих этапах здесь появится полный UI.  -->
-    <!-- ============================================ -->
     <main class="container">
 
-      <!-- Заголовок приложения -->
-      <h1 class="app-title">vlessok</h1>
-      <p class="app-subtitle">VPN-клиент · VLESS + Reality</p>
-
-      <!-- Разделительная линия -->
-      <hr class="divider" />
-
-      <!-- Секция проверки связи с бэкендом -->
-      <div class="test-section">
-        <p class="test-description">
-          Нажми кнопку, чтобы проверить связь между интерфейсом и Rust-бэкендом:
-        </p>
-
-        <!-- Кнопка тестирования -->
-        <button id="test-btn" type="button">
-          🔌 Проверить связь с бэкендом
-        </button>
-
-        <!-- Сюда выведется ответ от Rust -->
-        <p id="result-msg" class="result-msg"></p>
+      <!-- ====================================================== -->
+      <!-- ЗАГОЛОВОК                                              -->
+      <!-- ====================================================== -->
+      <div class="header">
+        <h1 class="app-title">vlessok</h1>
+        <p class="app-subtitle">VLESS · Reality · Vision</p>
       </div>
 
-      <!-- Подвал с версией -->
-      <footer class="app-footer">
-        <p>Этап 1: Каркас · v0.1.0</p>
-      </footer>
+      <!-- ====================================================== -->
+      <!-- ИНДИКАТОР СТАТУСА ПОДКЛЮЧЕНИЯ                         -->
+      <!-- Опрашивается каждую секунду через is_connected        -->
+      <!-- ====================================================== -->
+      <div class="status-block">
+        <span id="status-dot" class="status-dot disconnected"></span>
+        <span id="status-text" class="status-text">Отключено</span>
+      </div>
+
+      <!-- ====================================================== -->
+      <!-- ПОЛЕ ВВОДА VLESS-URL                                  -->
+      <!-- ====================================================== -->
+      <div class="input-block">
+        <label for="vless-url" class="input-label">VLESS-ссылка</label>
+        <textarea
+          id="vless-url"
+          class="vless-input"
+          placeholder="vless://UUID@server:port?security=reality&pbk=...&sni=...#Имя"
+          rows="4"
+          spellcheck="false"
+          autocomplete="off"
+        ></textarea>
+      </div>
+
+      <!-- ====================================================== -->
+      <!-- КНОПКИ УПРАВЛЕНИЯ                                     -->
+      <!-- ====================================================== -->
+      <div class="buttons-block">
+        <button id="btn-connect" class="btn btn-connect" type="button">
+          ▶ Подключить
+        </button>
+        <button id="btn-disconnect" class="btn btn-disconnect" type="button" disabled>
+          ■ Отключить
+        </button>
+      </div>
+
+      <!-- ====================================================== -->
+      <!-- ЛОГ СОБЫТИЙ                                           -->
+      <!-- Здесь выводятся статусы операций и ошибки             -->
+      <!-- ====================================================== -->
+      <div class="log-block">
+        <div class="log-header">
+          <span class="log-title">Журнал событий</span>
+          <button id="btn-clear-log" class="btn-clear" type="button">Очистить</button>
+        </div>
+        <div id="log-output" class="log-output">
+          <div class="log-entry log-info">Приложение запущено. Вставьте VLESS-ссылку и нажмите «Подключить».</div>
+        </div>
+      </div>
+
+      <!-- Версия в подвале -->
+      <div class="app-footer">
+        <p>Этап 2: SOCKS5-прокси · v0.2.0</p>
+        <p class="footer-hint">Прокси: 127.0.0.1:10808</p>
+      </div>
 
     </main>
   </body>
