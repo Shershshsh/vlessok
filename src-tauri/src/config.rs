@@ -235,7 +235,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
         // Строим правила route с учётом типа адреса сервера
         let mut route_rules = vec![
             json!({ "action": "sniff", "sniffer": ["http", "tls", "quic"], "timeout": "100ms" }),
-            json!({ "protocol": "dns", "action": "hijack-dns" }),
+            json!({ "port": [53], "action": "hijack-dns" }),
         ];
 
         // Явный bypass для VLESS-сервера — предотвращает routing loop
@@ -255,6 +255,28 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
 
         // Приватные адреса тоже идут через direct
         route_rules.push(json!({ "ip_is_private": true, "outbound": "direct" }));
+
+        // Процессы, которые должны идти через VPN (с наивысшим приоритетом)
+        let mut proxy_processes = vec![];
+        if let Some(rules) = routing_rules {
+            if rules.routing_mode == RoutingMode::Rule {
+                for p in &rules.processes {
+                    proxy_processes.push(p.clone());
+                }
+                if rules.geo_rules.iter().any(|r| r == "telegram_combo") {
+                    proxy_processes.push("telegram.exe".to_string());
+                }
+                if rules.geo_rules.iter().any(|r| r == "discord_combo") {
+                    proxy_processes.push("discord.exe".to_string());
+                }
+            }
+        }
+        if !proxy_processes.is_empty() {
+            route_rules.push(json!({
+                "process_name": proxy_processes,
+                "outbound": "proxy"
+            }));
+        }
 
         // Внедряем пользовательские правила маршрутизации
         let mut final_route = "proxy";
@@ -323,13 +345,15 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "download_detour": "direct"
                             }));
                             proxy_tags.push("geosite-telegram".to_string());
-                            
-                            // Добавляем telegram.exe в локальный список процессов для добавления ниже
-                            // (чтобы не дублировать код генерации)
-                            route_rules.push(json!({
-                                "process_name": ["telegram.exe"],
-                                "outbound": "proxy"
+
+                            rule_sets.push(json!({
+                                "tag": "geoip-telegram",
+                                "type": "remote",
+                                "format": "binary",
+                                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-telegram.srs",
+                                "download_detour": "direct"
                             }));
+                            proxy_tags.push("geoip-telegram".to_string());
                             continue;
                         }
 
@@ -342,11 +366,15 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "download_detour": "direct"
                             }));
                             proxy_tags.push("geosite-discord".to_string());
-                            
-                            route_rules.push(json!({
-                                "process_name": ["discord.exe"],
-                                "outbound": "proxy"
+
+                            rule_sets.push(json!({
+                                "tag": "geoip-discord",
+                                "type": "remote",
+                                "format": "binary",
+                                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-discord.srs",
+                                "download_detour": "direct"
                             }));
+                            proxy_tags.push("geoip-discord".to_string());
                             continue;
                         }
 
@@ -378,19 +406,12 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                         }));
                     }
                 }
-
-                // Процессы
-                if !rules.processes.is_empty() {
-                    route_rules.push(json!({
-                        "process_name": rules.processes,
-                        "outbound": "proxy"
-                    }));
-                }
             }
         }
 
         let mut route_obj = json!({
             "auto_detect_interface": true,
+            "find_process": true,
             "rules": route_rules,
             "final": final_route
         });

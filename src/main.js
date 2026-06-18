@@ -347,7 +347,11 @@ function renderList(container, items, removeCmd) {
     btn.onclick = async () => {
       saveHistoryState();
       try {
-        await invoke(removeCmd, { [removeCmd.split('_')[1]]: item });
+        let argName = removeCmd.split('_')[1];
+        if (removeCmd === 'remove_geo_rule') {
+          argName = 'rule';
+        }
+        await invoke(removeCmd, { [argName]: item });
         await loadRoutingRules(); // перезагружаем после удаления
         await autoReconnect();
       } catch (err) {
