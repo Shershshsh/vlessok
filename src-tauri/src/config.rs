@@ -345,15 +345,6 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "download_detour": "direct"
                             }));
                             proxy_tags.push("geosite-telegram".to_string());
-
-                            rule_sets.push(json!({
-                                "tag": "geoip-telegram",
-                                "type": "remote",
-                                "format": "binary",
-                                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-telegram.srs",
-                                "download_detour": "direct"
-                            }));
-                            proxy_tags.push("geoip-telegram".to_string());
                             continue;
                         }
 
@@ -366,15 +357,6 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "download_detour": "direct"
                             }));
                             proxy_tags.push("geosite-discord".to_string());
-
-                            rule_sets.push(json!({
-                                "tag": "geoip-discord",
-                                "type": "remote",
-                                "format": "binary",
-                                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-discord.srs",
-                                "download_detour": "direct"
-                            }));
-                            proxy_tags.push("geoip-discord".to_string());
                             continue;
                         }
 
