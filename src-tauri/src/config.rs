@@ -6,21 +6,15 @@
 // Возвращает готовый JSON для запуска sing-box.
 // ============================================================
 
-use serde_json::{json, Value};
+use serde_json::json;
 use url::Url;
+use crate::routing::{RoutingMode, RoutingRules};
+use std::path::Path;
 
-/// Режим подключения: как именно sing-box перехватывает трафик
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ConnectionMode {
-    Mixed, // SOCKS5 + HTTP прокси на 127.0.0.1:10808
-    Tun,   // Полноценный системный VPN интерфейс (требует прав администратора)
-}
-
-/// Основная функция парсинга.
-/// Принимает VLESS URL-строку и режим, возвращает JSON-строку или ошибку.
-pub fn vless_url_to_singbox_config(raw_url: &str, mode: ConnectionMode) -> Result<String, String> {
+/// Основная функция: парсит VLESS-URL и генерирует JSON-конфиг для sing-box.
+pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&RoutingRules>, app_data_dir: &Path) -> Result<String, String> {
     // Обрезаем пробелы по краям — пользователь мог случайно скопировать с пробелом
-    let raw_url = raw_url.trim();
+    let raw_url = url_str.trim();
 
     // Парсим URL через крейт url
     let parsed = Url::parse(raw_url)
@@ -143,17 +137,14 @@ pub fn vless_url_to_singbox_config(raw_url: &str, mode: ConnectionMode) -> Resul
         vless_outbound["flow"] = json!(flow_value);
     }
 
-    // domain_resolver нужен только в TUN: в Mixed-режиме DNS-блока с "local-dns" нет
-    let direct_outbound = if mode == ConnectionMode::Tun {
-        json!({ "type": "direct", "tag": "direct", "domain_resolver": "local-dns" })
-    } else {
-        json!({ "type": "direct", "tag": "direct" })
-    };
+    // domain_resolver нужен для DNS-резолвинга в TUN-режиме
+    let direct_outbound = json!({ "type": "direct", "tag": "direct", "domain_resolver": "local-dns" });
 
     // Базовый конфиг (одинаковый для всех режимов)
     let mut config = json!({
         "log": {
-            "level": "warn"
+            "level": "debug",
+            "timestamp": true
         },
         "outbounds": [
             vless_outbound,
@@ -165,9 +156,8 @@ pub fn vless_url_to_singbox_config(raw_url: &str, mode: ConnectionMode) -> Resul
         ]
     });
 
-    // Дополняем конфиг в зависимости от режима
-    if mode == ConnectionMode::Tun {
-        // Строим CIDR из адреса сервера (добавляем /32 если голый IP, иначе оставляем как есть)
+    // --- Настройка TUN и DNS ---
+    // Строим CIDR из адреса сервера
         // Если server — это домен, sing-box сам его зарезолвит для route_exclude_address
         // Но route_exclude_address принимает только IP/CIDR. Поэтому мы добавляем правило
         // в route.rules через ip_cidr + domain, что покрывает оба случая.
@@ -232,6 +222,16 @@ pub fn vless_url_to_singbox_config(raw_url: &str, mode: ConnectionMode) -> Resul
             "final": "remote-dns",
             "strategy": "ipv4_only"
         });
+
+        // Если сервер задан доменом, его обязательно нужно резолвить локально, иначе chicken-and-egg
+        if !is_ip {
+            if let Some(rules_array) = config["dns"]["rules"].as_array_mut() {
+                rules_array.insert(0, json!({
+                    "domain": [server.clone()],
+                    "server": "local-dns"
+                }));
+            }
+        }
         // Строим правила route с учётом типа адреса сервера
         let mut route_rules = vec![
             json!({ "action": "sniff", "sniffer": ["http", "tls", "quic"], "timeout": "100ms" }),
@@ -256,31 +256,150 @@ pub fn vless_url_to_singbox_config(raw_url: &str, mode: ConnectionMode) -> Resul
         // Приватные адреса тоже идут через direct
         route_rules.push(json!({ "ip_is_private": true, "outbound": "direct" }));
 
-        config["route"] = json!({
+        // Внедряем пользовательские правила маршрутизации
+        let mut final_route = "proxy";
+        
+        let inside_path = app_data_dir.join("inside.json");
+        let outside_path = app_data_dir.join("outside.json");
+
+        // rule_sets хранит источники внешних списков (SRS или локальные JSON)
+        let mut rule_sets = vec![];
+        
+        // --- 1. Обязательный outside-pack (всегда идёт напрямую) ---
+        // Добавляем источник только если файл существует
+        if outside_path.exists() {
+            let p_str = outside_path.to_string_lossy().replace('\\', "/");
+            rule_sets.push(json!({
+                "tag": "outside-pack",
+                "type": "local",
+                "format": "source",
+                "path": p_str
+            }));
+            
+            // Правило маршрутизации: outside-pack всегда идёт напрямую
+            route_rules.push(json!({
+                "rule_set": ["outside-pack"],
+                "outbound": "direct"
+            }));
+        }
+
+        if let Some(rules) = routing_rules {
+            if rules.routing_mode == RoutingMode::Rule {
+                final_route = "direct"; // По умолчанию прямой доступ, если выбрано "Правило"
+
+                // Домены
+                if !rules.domains.is_empty() {
+                    route_rules.push(json!({
+                        "domain_suffix": rules.domains,
+                        "outbound": "proxy"
+                    }));
+                }
+
+                // GEO правила (собираем rule_sets и тэги)
+                if !rules.geo_rules.is_empty() {
+                    let mut proxy_tags = vec![];
+                    
+                    for geo_rule in &rules.geo_rules {
+                        if geo_rule == "russia_pack" {
+                            if inside_path.exists() {
+                                let p_str = inside_path.to_string_lossy().replace('\\', "/");
+                                rule_sets.push(json!({
+                                    "tag": "inside-pack",
+                                    "type": "local",
+                                    "format": "source",
+                                    "path": p_str
+                                }));
+                                proxy_tags.push("inside-pack".to_string());
+                            }
+                            continue;
+                        }
+
+                        if geo_rule == "telegram_combo" {
+                            rule_sets.push(json!({
+                                "tag": "geosite-telegram",
+                                "type": "remote",
+                                "format": "binary",
+                                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-telegram.srs",
+                                "download_detour": "direct"
+                            }));
+                            proxy_tags.push("geosite-telegram".to_string());
+                            
+                            // Добавляем telegram.exe в локальный список процессов для добавления ниже
+                            // (чтобы не дублировать код генерации)
+                            route_rules.push(json!({
+                                "process_name": ["telegram.exe"],
+                                "outbound": "proxy"
+                            }));
+                            continue;
+                        }
+
+                        if geo_rule == "discord_combo" {
+                            rule_sets.push(json!({
+                                "tag": "geosite-discord",
+                                "type": "remote",
+                                "format": "binary",
+                                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-discord.srs",
+                                "download_detour": "direct"
+                            }));
+                            proxy_tags.push("geosite-discord".to_string());
+                            
+                            route_rules.push(json!({
+                                "process_name": ["discord.exe"],
+                                "outbound": "proxy"
+                            }));
+                            continue;
+                        }
+
+                        let tag = geo_rule.replace(":", "-");
+                        proxy_tags.push(tag.clone());
+
+                        let url = if geo_rule.starts_with("geosite:") {
+                            let name = geo_rule.strip_prefix("geosite:").unwrap();
+                            format!("https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-{}.srs", name)
+                        } else if geo_rule.starts_with("geoip:") {
+                            let name = geo_rule.strip_prefix("geoip:").unwrap();
+                            format!("https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-{}.srs", name)
+                        } else {
+                            continue;
+                        };
+
+                        rule_sets.push(json!({
+                            "tag": tag,
+                            "type": "remote",
+                            "format": "binary",
+                            "url": url,
+                            "download_detour": "direct"
+                        }));
+                    }
+                    if !proxy_tags.is_empty() {
+                        route_rules.push(json!({
+                            "rule_set": proxy_tags,
+                            "outbound": "proxy"
+                        }));
+                    }
+                }
+
+                // Процессы
+                if !rules.processes.is_empty() {
+                    route_rules.push(json!({
+                        "process_name": rules.processes,
+                        "outbound": "proxy"
+                    }));
+                }
+            }
+        }
+
+        let mut route_obj = json!({
             "auto_detect_interface": true,
             "rules": route_rules,
-            "final": "proxy"
+            "final": final_route
         });
-    } else {
-        // Режим Mixed (SOCKS5/HTTP прокси)
-        config["inbounds"] = json!([
-            {
-                "type": "mixed",
-                "tag": "mixed-in",
-                "listen": "127.0.0.1",
-                "listen_port": 10808
-            }
-        ]);
-        config["route"] = json!({
-            "rules": [
-                {
-                    "ip_is_private": true,
-                    "outbound": "direct"
-                }
-            ],
-            "final": "proxy"
-        });
-    }
+
+        if !rule_sets.is_empty() {
+            route_obj["rule_set"] = json!(rule_sets);
+        }
+
+        config["route"] = route_obj;
 
     // Сериализуем в красиво отформатированный JSON (с отступами)
     serde_json::to_string_pretty(&config)
@@ -345,34 +464,39 @@ mod tests {
 
     #[test]
     fn test_valid_url_parses_ok() {
-        let result = vless_url_to_singbox_config(TEST_URL, ConnectionMode::Mixed);
+        let app_dir = Path::new("");
+        let result = vless_url_to_singbox_config(TEST_URL, None, &app_dir);
         assert!(result.is_ok(), "Парсинг валидного URL должен успешно работать");
     }
 
     #[test]
     fn test_json_contains_server() {
-        let json_str = vless_url_to_singbox_config(TEST_URL, ConnectionMode::Mixed).unwrap();
+        let app_dir = Path::new("");
+        let json_str = vless_url_to_singbox_config(TEST_URL, None, &app_dir).unwrap();
         assert!(json_str.contains("192.168.1.1"), "JSON должен содержать адрес сервера");
     }
 
     #[test]
     fn test_json_contains_flow() {
-        let json_str = vless_url_to_singbox_config(TEST_URL, ConnectionMode::Mixed).unwrap();
+        let app_dir = Path::new("");
+        let json_str = vless_url_to_singbox_config(TEST_URL, None, &app_dir).unwrap();
         assert!(json_str.contains("xtls-rprx-vision"), "JSON должен содержать flow");
     }
 
     #[test]
     fn test_missing_sni_returns_error() {
+        let app_dir = Path::new("");
         let url_without_sni = "vless://550e8400-e29b-41d4-a716-446655440000@1.2.3.4:443\
             ?security=reality&pbk=key123";
-        let result = vless_url_to_singbox_config(url_without_sni, ConnectionMode::Mixed);
+        let result = vless_url_to_singbox_config(url_without_sni, None, &app_dir);
         assert!(result.is_err(), "URL без SNI должен возвращать ошибку");
     }
 
     #[test]
     fn test_invalid_uuid_returns_error() {
+        let app_dir = Path::new("");
         let bad_url = "vless://not-a-uuid@1.2.3.4:443?sni=x.com&pbk=key";
-        let result = vless_url_to_singbox_config(bad_url, ConnectionMode::Mixed);
+        let result = vless_url_to_singbox_config(bad_url, None, &app_dir);
         assert!(result.is_err(), "URL с невалидным UUID должен возвращать ошибку");
     }
 }

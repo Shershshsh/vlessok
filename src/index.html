@@ -29,6 +29,76 @@
       </div>
 
       <!-- ====================================================== -->
+      <!-- МАРШРУТИЗАЦИЯ (split tunneling)                       -->
+      <!-- ====================================================== -->
+      <div class="routing-block">
+        <label class="input-label">Режим маршрутизации:</label>
+        <div class="mode-switch">
+          <label>
+            <input type="radio" id="routing-global" name="routing-mode" value="global" checked>
+            <span>ГЛОБАЛЬНО</span>
+          </label>
+          <label>
+            <input type="radio" id="routing-rule" name="routing-mode" value="rule">
+            <span>ПРАВИЛО</span>
+          </label>
+        </div>
+
+        <div id="rules-section" class="rules-section hidden">
+          <div id="rules-empty-warning" class="log-entry log-warn hidden">
+            ⚠ В режиме ПРАВИЛО без правил весь трафик идёт мимо VPN.
+          </div>
+          
+          <div class="rules-tabs">
+            <button class="tab-btn active" data-tab="domains">ДОМЕНЫ (<span id="count-domains">0</span>)</button>
+            <button class="tab-btn" data-tab="geo">GEOIP/GEOSITE (<span id="count-geo">0</span>)</button>
+            <button class="tab-btn" data-tab="processes">ПРОЦЕССЫ (<span id="count-processes">0</span>)</button>
+          </div>
+
+          <!-- Вкладка ДОМЕНЫ -->
+          <div id="tab-domains" class="tab-content active">
+            <div class="rules-input-row">
+              <input type="text" id="input-domain" class="rule-input" placeholder="youtube.com">
+              <button id="btn-add-domain" class="btn btn-add">+ Добавить</button>
+              <button id="btn-mass-domain" class="btn btn-secondary">Вставить списком</button>
+              <button id="btn-clear-domains" class="btn btn-disconnect">Очистить всё</button>
+            </div>
+            <p class="rule-hint">Можно вставлять любой формат, включая полные ссылки — всё нормализуется.</p>
+            <div id="list-domains" class="rules-list"></div>
+          </div>
+
+          <!-- Вкладка GEO -->
+          <div id="tab-geo" class="tab-content hidden">
+            <div class="preset-geo-list">
+              <label><input type="checkbox" class="preset-geo" value="russia_pack"> Russia Pack (inside-raw.lst) - Обход блокировок РФ</label>
+              <label><input type="checkbox" class="preset-geo" value="telegram_combo"> Telegram (домены и процесс telegram.exe)</label>
+              <label><input type="checkbox" class="preset-geo" value="discord_combo"> Discord (домены и процесс discord.exe)</label>
+              <label><input type="checkbox" class="preset-geo" value="geosite:google"> Все Google (geosite:google)</label>
+            </div>
+            <div class="rules-input-row">
+              <input type="text" id="input-geo" class="rule-input" placeholder="geosite:netflix">
+              <button id="btn-add-geo" class="btn btn-add">+ Добавить</button>
+              <button id="btn-mass-geo" class="btn btn-secondary">Вставить списком</button>
+              <button id="btn-clear-geo" class="btn btn-disconnect">Очистить всё</button>
+            </div>
+            <div id="list-geo" class="rules-list"></div>
+          </div>
+
+          <!-- Вкладка ПРОЦЕССЫ -->
+          <div id="tab-processes" class="tab-content hidden">
+            <div class="rules-input-row">
+              <input type="text" id="input-process" class="rule-input" placeholder="telegram.exe">
+              <button id="btn-add-process" class="btn btn-add">+ Добавить</button>
+              <button id="btn-pick-process" class="btn btn-secondary">📁 Выбрать exe...</button>
+              <button id="btn-mass-process" class="btn btn-secondary">Вставить списком</button>
+              <button id="btn-clear-processes" class="btn btn-disconnect">Очистить всё</button>
+            </div>
+            <div id="list-processes" class="rules-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====================================================== -->
       <!-- ПОЛЕ ВВОДА VLESS-URL                                  -->
       <!-- ====================================================== -->
       <div class="input-block">
@@ -46,19 +116,7 @@
       <!-- ====================================================== -->
       <!-- РЕЖИМ ПОДКЛЮЧЕНИЯ И СТАТУС                            -->
       <!-- ====================================================== -->
-      <div class="mode-selector">
-        <label class="input-label">Режим работы:</label>
-        <div class="mode-switch">
-          <label>
-            <input type="radio" id="mode-tun" name="vpn-mode" value="tun" checked>
-            <span>Системный VPN (TUN)</span>
-          </label>
-          <label>
-            <input type="radio" id="mode-socks" name="vpn-mode" value="socks">
-            <span>SOCKS5 (Прокси)</span>
-          </label>
-        </div>
-      </div>
+      <!-- Режим SOCKS/TUN удален. Всегда используется системный VPN (TUN). -->
 
       <!-- ИНФО-БЛОК ПОДКЛЮЧЕНИЯ (Скрыт по умолчанию) -->
       <div id="connection-info" class="connection-info hidden">
@@ -118,8 +176,35 @@
         <p>Для создания системного VPN-туннеля (режим TUN) приложению необходимы права администратора. Windows покажет запрос UAC.</p>
         <div class="modal-actions">
           <button id="btn-relaunch-admin" class="btn btn-connect">Перезапустить как Админ</button>
-          <button id="btn-use-socks" class="btn btn-disconnect">Использовать SOCKS5</button>
           <button id="btn-cancel-modal" class="btn-text">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно массового импорта -->
+    <div id="mass-import-modal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3 id="mass-import-title">Массовый импорт</h3>
+        <p class="rule-hint">Вставьте список (каждый элемент с новой строки). Можно вставлять домены, ссылки или правила.</p>
+        <textarea id="mass-import-text" rows="10" class="vless-input" placeholder="youtube.com&#10;netflix.com"></textarea>
+        <div class="modal-actions" style="margin-top: 15px;">
+          <button id="btn-mass-import-apply" class="btn btn-connect">Импортировать</button>
+          <button id="btn-mass-import-cancel" class="btn-text">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно диспетчера процессов -->
+    <div id="process-picker-modal" class="modal-overlay hidden">
+      <div class="modal-content" style="max-width: 500px;">
+        <h3>Диспетчер процессов</h3>
+        <p class="rule-hint">Выберите запущенное приложение для маршрутизации через VPN.</p>
+        <input type="text" id="process-search" class="rule-input" placeholder="Поиск (например: telegram)..." style="margin-bottom: 10px;">
+        <div id="process-list" class="rules-list" style="max-height: 300px; overflow-y: auto;">
+          <!-- Процессы будут загружены сюда -->
+        </div>
+        <div class="modal-actions" style="margin-top: 15px;">
+          <button id="btn-process-picker-cancel" class="btn-text">Отмена</button>
         </div>
       </div>
     </div>
