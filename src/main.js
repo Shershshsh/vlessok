@@ -43,6 +43,7 @@ let serverNameSpan;
 let serverPingSpan;
 let btnRefreshPing;
 let btnResetNetwork;
+let btnOpenConnections;
 
 // Элементы маршрутизации
 let routingGlobalRadio;
@@ -797,6 +798,8 @@ window.addEventListener('DOMContentLoaded', () => {
     uacModal         = getEl('uac-modal');
     btnRelaunchAdmin = getEl('btn-relaunch-admin');
     btnCancelModal   = getEl('btn-cancel-modal');
+    btnResetNetwork  = getEl('btn-reset-network');
+    btnOpenConnections = getEl('btn-open-connections');
     connectionInfo   = getEl('connection-info');
     externalIpSpan   = getEl('external-ip');
     serverNameSpan   = getEl('server-name');
@@ -892,6 +895,14 @@ window.addEventListener('DOMContentLoaded', () => {
         localStorage.removeItem('dns_leak_fix_applied');
         addLog(`✅ ${res}`, 'success');
       } catch (e) { addLog(`❌ Ошибка сброса сети: ${e}`, 'error'); }
+    });
+
+    bindEvent(btnOpenConnections, 'click', async () => {
+      try {
+        await invoke('open_connections_window');
+      } catch (err) {
+        addLog(`❌ Ошибка открытия окна соединений: ${err}`, 'error');
+      }
     });
     bindEvent(btnClearLog, 'click', () => {
       if (logOutput) logOutput.innerHTML = '';

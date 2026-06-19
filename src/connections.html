@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Монитор соединений</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="connections.css">
+</head>
+<body>
+  <div class="connections-container">
+    <div class="connections-header">
+      <h2>🌐 Монитор соединений</h2>
+      <div class="filters">
+        <input type="text" id="filter-process" placeholder="Поиск по процессу...">
+        <input type="text" id="filter-domain" placeholder="Поиск по домену/IP...">
+        <select id="filter-type">
+          <option value="all">Все маршруты</option>
+          <option value="proxy">Proxy</option>
+          <option value="direct">Direct</option>
+          <option value="block">Block</option>
+        </select>
+        <button id="btn-clear-connections" class="btn btn-secondary">Очистить</button>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table id="connections-table">
+        <thead>
+          <tr>
+            <th>Процесс</th>
+            <th>Домен / IP</th>
+            <th>Маршрут</th>
+            <th>Правило</th>
+            <th>DL / UL</th>
+            <th>Время</th>
+          </tr>
+        </thead>
+        <tbody id="connections-body">
+          <!-- Данные будут здесь -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="connections.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+.connections-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.connections-header {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.connections-header h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filters input, .filters select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  flex: 1;
+  min-width: 150px;
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+thead {
+  background: var(--bg-hover);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+th, td {
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+/* Цвета для бейджей маршрутов */
+.route-proxy {
+  color: #a855f7;
+  font-weight: 600;
+}
+
+.route-direct {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.route-block {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* Форматирование трафика */
+.traffic {
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--text-muted);
+}

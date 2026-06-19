@@ -144,8 +144,15 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
     // Базовый конфиг (одинаковый для всех режимов)
     let mut config = json!({
         "log": {
-            "level": "debug",
+            "disabled": false,
+            "level": "info",
             "timestamp": true
+        },
+        "experimental": {
+            "clash_api": {
+                "external_controller": "127.0.0.1:9090",
+                "default_mode": "rule"
+            }
         },
         "outbounds": [
             vless_outbound,

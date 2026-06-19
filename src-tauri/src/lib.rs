@@ -207,6 +207,35 @@ fn check_ping(url: String) -> Result<u64, String> {
     }
 }
 
+#[tauri::command]
+fn open_connections_window(app: tauri::AppHandle) -> Result<(), String> {
+    log::info!("Открытие окна мониторинга соединений");
+    
+    // Если окно уже существует, просто фокусируемся на нем
+    if let Some(window) = app.get_webview_window("connections") {
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Иначе создаем новое
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        "connections",
+        tauri::WebviewUrl::App("connections.html".into())
+    )
+    .title("Монитор соединений")
+    .inner_size(800.0, 600.0)
+    .min_inner_size(600.0, 400.0)
+    .build()
+    .map_err(|e| format!("Ошибка создания окна: {}", e))?;
+
+    Ok(())
+}
+
+// ============================================================
+// Админские функции и сеть
+// ============================================================
+
 // ============================================================
 // Команды маршрутизации
 // ============================================================
@@ -568,7 +597,8 @@ pub fn run() {
             set_all_routing_rules,
             get_running_processes,
             get_process_icons_batched,
-            check_ping
+            check_ping,
+            open_connections_window
         ])
         .run(tauri::generate_context!())
         .expect("Ошибка при запуске приложения vlessok");
