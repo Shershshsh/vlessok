@@ -15,7 +15,7 @@ listen('singbox-error', (event) => {
   // Убираем ANSI цветовые коды
   msg = msg.replace(/\x1B\[[0-9;]*[mG]/g, '');
   // Фильтруем некритичные ошибки (таймауты DNS, обычные обрывы отдельных соединений)
-  const ignored = ['dns: exchange failed', 'i/o timeout', 'wsarecv:', 'aborted by the software', 'connection attempt failed'];
+  const ignored = ['dns: exchange failed', 'i/o timeout', 'wsarecv:', 'aborted by the software', 'connection attempt failed', 'forcibly closed', 'connection download closed'];
   if (ignored.some(err => msg.includes(err))) return;
   
   addLog(`❌ [SingBox]: ${msg}`, 'error');
@@ -896,7 +896,7 @@ window.addEventListener('DOMContentLoaded', () => {
       catch (e) { addLog(`❌ Ошибка: ${e}`, 'error'); }
     });
     bindEvent(btnResetNetwork, 'click', async () => {
-      if (!confirm('Вы уверены, что хотите сбросить настройки сети? Это может кратковременно прервать соединение.')) return;
+      if (!confirm('Вы уверены, что хотите сбросить настройки сети? Это может временно прервать соединения.')) return;
       addLog('🔄 Сбрасываем сетевые настройки...', 'info');
       try {
         const res = await invoke('reset_network');

@@ -81,7 +81,7 @@ impl SingBoxManager {
     /// Если уже запущен — сначала останавливает старый процесс.
     pub fn start(&self, config_json: String, app: tauri::AppHandle) -> Result<(), String> {
         // Если процесс уже запущен — остановить
-        if self.is_running() {
+        if self.is_running(None) {
             warn!("sing-box уже запущен, останавливаем перед повторным запуском");
             self.stop()?;
         }
@@ -243,7 +243,7 @@ impl SingBoxManager {
 
     /// Проверяет, запущен ли sing-box в данный момент.
     /// Также обнаруживает если процесс завершился сам по себе (краш).
-    pub fn is_running(&self) -> bool {
+    pub fn is_running(&self, app: Option<&tauri::AppHandle>) -> bool {
         let mut process_guard = self.process.lock().unwrap();
 
         if let Some(child) = process_guard.as_mut() {
@@ -255,7 +255,12 @@ impl SingBoxManager {
                 }
                 Ok(Some(status)) => {
                     // Процесс завершился (возможно, краш)
-                    warn!("sing-box неожиданно завершился со статусом: {}", status);
+                    error!("sing-box неожиданно завершился со статусом: {}", status);
+                    if let Some(a) = app {
+                        use tauri::Emitter;
+                        let msg = format!("sing-box неожиданно завершился (crash). Код: {}\nВозможно, конфликт с другим VPN (порт уже занят) или ошибка в конфигурации. Закройте другие VPN-приложения и попробуйте снова.", status);
+                        let _ = a.emit("singbox-error", msg);
+                    }
                     // Очищаем handle
                     *process_guard = None;
                     false

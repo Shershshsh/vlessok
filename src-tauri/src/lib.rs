@@ -87,12 +87,12 @@ fn disconnect(state: State<'_, AppState>) -> Result<String, String> {
 /// Вызов из JS: await invoke("is_connected")
 /// Возвращает true/false
 #[tauri::command]
-fn is_connected(state: State<'_, AppState>) -> bool {
+fn is_connected(state: State<'_, AppState>, app: tauri::AppHandle) -> bool {
     let manager = match state.manager.lock() {
         Ok(m) => m,
         Err(_) => return false,
     };
-    manager.is_running()
+    manager.is_running(Some(&app))
 }
 
 #[tauri::command]

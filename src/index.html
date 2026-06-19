@@ -23,7 +23,7 @@
       <!-- ИНДИКАТОР СТАТУСА ПОДКЛЮЧЕНИЯ                         -->
       <!-- Опрашивается каждую секунду через is_connected        -->
       <!-- ====================================================== -->
-      <div class="status-block">
+      <div class="status-block" style="position: sticky; top: 0; z-index: 10;">
         <span id="status-dot" class="status-dot disconnected"></span>
         <span id="status-text" class="status-text">Отключено</span>
       </div>
@@ -168,10 +168,11 @@
       </div>
 
       <div class="app-footer">
-        <p>Версия 1.0.7</p>
+        <p>Версия 1.1.1</p>
         <div class="footer-actions">
-          <button id="btn-open-connections" class="btn-text" style="color: var(--accent);">🌐 Монитор соединений</button>
-          <button id="btn-reset-network" class="btn-text">Сбросить настройки сети</button>
+          <button id="btn-open-connections" class="btn-text" style="color: var(--accent);">📊 Монитор подключений</button>
+          <span style="color: var(--border);">|</span>
+          <button id="btn-reset-network" class="btn-text">Сбросить сетевые настройки</button>
         </div>
       </div>
 
