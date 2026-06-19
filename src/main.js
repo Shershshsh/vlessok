@@ -190,7 +190,7 @@ function renderProfiles() {
     }
     localStorage.setItem('vlessok_last_profile_id', profileSelect.value);
     
-    if(btnConnect && statusText && statusText.textContent === 'Отключено') btnConnect.disabled = false;
+    if(btnConnect && statusText && statusText.textContent === 'ОТКЛЮЧЕНО') btnConnect.disabled = false;
     if(btnEditProfile) btnEditProfile.disabled = false;
     if(btnDeleteProfile) btnDeleteProfile.disabled = false;
   }
@@ -294,7 +294,7 @@ function addLog(message, type = 'info') {
 function setConnected() {
   if (statusDot) statusDot.className = 'status-dot connected';
   if (statusText) {
-    statusText.textContent = 'Подключено';
+    statusText.textContent = 'ПОДКЛЮЧЕНО';
     statusText.style.color = 'var(--connected-color)';
   }
   if (btnConnect) btnConnect.disabled = true;
@@ -304,7 +304,7 @@ function setConnected() {
 function setDisconnected() {
   if (statusDot) statusDot.className = 'status-dot disconnected';
   if (statusText) {
-    statusText.textContent = 'Отключено';
+    statusText.textContent = 'ОТКЛЮЧЕНО';
     statusText.style.color = 'var(--disconnected-color)';
   }
   if (btnConnect) btnConnect.disabled = false;
@@ -315,7 +315,7 @@ function setDisconnected() {
 function setConnecting() {
   if (statusDot) statusDot.className = 'status-dot connecting';
   if (statusText) {
-    statusText.textContent = 'Подключение...';
+    statusText.textContent = 'ПОДКЛЮЧЕНО';
     statusText.style.color = '#f39c12';
   }
   if (btnConnect) btnConnect.disabled = true;
@@ -325,7 +325,7 @@ function setConnecting() {
 async function pollStatus() {
   try {
     const running = await invoke('is_connected');
-    if (statusText && statusText.textContent !== 'Подключение...' && statusText.textContent !== 'Отключение...') {
+    if (statusText && statusText.textContent !== 'ПОДКЛЮЧЕНО' && statusText.textContent !== 'ОТКЛЮЧЕНО') {
       if (running) setConnected();
       else setDisconnected();
     }
@@ -418,7 +418,7 @@ async function handleConnect() {
 async function handleDisconnect() {
   if (statusDot) statusDot.className = 'status-dot connecting';
   if (statusText) {
-    statusText.textContent = 'Отключение...';
+    statusText.textContent = 'ОТКЛЮЧЕНО';
     statusText.style.color = '#f39c12';
   }
   if (btnDisconnect) btnDisconnect.disabled = true;

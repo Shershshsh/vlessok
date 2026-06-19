@@ -26,6 +26,8 @@ pub struct SingBoxManager {
     config_path: Arc<Mutex<Option<PathBuf>>>,
     /// Job Object для гарантии убиения дочернего процесса при смерти vlessok (для Windows)
     job: Arc<Mutex<Option<ProcessJob>>>,
+    /// Буфер для хранения последних строк логов (для вывода при краше)
+    last_stderr: Arc<Mutex<std::collections::VecDeque<String>>>,
 }
 
 impl SingBoxManager {
@@ -40,6 +42,7 @@ impl SingBoxManager {
             process: Arc::new(Mutex::new(None)),
             config_path: Arc::new(Mutex::new(None)),
             job: Arc::new(Mutex::new(job)),
+            last_stderr: Arc::new(Mutex::new(std::collections::VecDeque::with_capacity(10))),
         }
     }
 
@@ -175,6 +178,7 @@ impl SingBoxManager {
 
         if let Some(stderr) = child.stderr.take() {
             let app_clone = app.clone();
+            let stderr_buf = self.last_stderr.clone();
             thread::spawn(move || {
                 use std::io::{BufRead, BufReader};
                 use tauri::Emitter;
@@ -183,12 +187,19 @@ impl SingBoxManager {
                     match line {
                         Ok(l) => {
                             // sing-box пишет в stderr нормальные логи, не только ошибки
-                            if l.contains("ERROR") || l.contains("error") {
+                            if l.contains("FATAL") || l.contains("fatal") || l.contains("ERROR") || l.contains("error") {
                                 error!("[sing-box] {}", l);
                                 let _ = app_clone.emit("singbox-error", l.clone());
                             } else {
                                 info!("[sing-box] {}", l);
                             }
+                            
+                            // Сохраняем в буфер последних строк
+                            let mut buf = stderr_buf.lock().unwrap();
+                            if buf.len() >= 10 {
+                                buf.pop_front();
+                            }
+                            buf.push_back(l);
                         }
                         Err(e) => warn!("[sing-box stderr] ошибка чтения: {}", e),
                     }
@@ -258,7 +269,15 @@ impl SingBoxManager {
                     error!("sing-box неожиданно завершился со статусом: {}", status);
                     if let Some(a) = app {
                         use tauri::Emitter;
-                        let msg = format!("sing-box неожиданно завершился (crash). Код: {}\nВозможно, конфликт с другим VPN (порт уже занят) или ошибка в конфигурации. Закройте другие VPN-приложения и попробуйте снова.", status);
+                        let mut recent_logs = String::new();
+                        {
+                            let buf = self.last_stderr.lock().unwrap();
+                            if !buf.is_empty() {
+                                recent_logs = format!("\nПоследние логи:\n{}", buf.iter().cloned().collect::<Vec<_>>().join("\n"));
+                            }
+                        }
+                        
+                        let msg = format!("sing-box неожиданно завершился (crash). Код: {}\nВозможно, конфликт с другим VPN (порт уже занят) или ошибка в конфигурации. Закройте другие VPN-приложения и попробуйте снова.{}", status, recent_logs);
                         let _ = a.emit("singbox-error", msg);
                     }
                     // Очищаем handle
