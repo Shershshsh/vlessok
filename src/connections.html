@@ -20,8 +20,9 @@
         <input type="text" id="filter-domain" placeholder="Поиск по домену/IP..." />
       </div>
       <div class="search-box">
-        <input type="text" id="filter-process" list="active-processes" placeholder="Поиск по процессу..." />
-        <datalist id="active-processes"></datalist>
+        <select id="filter-process">
+          <option value="">Все процессы</option>
+        </select>
       </div>
       <div class="search-box route-filter-box">
         <select id="filter-route">
@@ -34,11 +35,9 @@
 
     <div class="sort-actions">
       <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 10px;">Сортировка:</span>
-      <button class="sort-btn active" data-sort="time">По времени</button>
-      <button class="sort-btn" data-sort="traffic">По трафику</button>
-      <button class="sort-btn" data-sort="process">По процессу</button>
-      <div style="flex: 1"></div>
-      <button id="btn-clear" class="btn-clear" title="Принудительно закрыть все открытые сокеты (может разорвать активные загрузки)">Закрыть все соединения</button>
+      <button class="sort-btn active" data-sort="time" data-dir="desc">По времени ⬇</button>
+      <button class="sort-btn" data-sort="traffic" data-dir="none">По трафику</button>
+      <button class="sort-btn" data-sort="process" data-dir="none">По процессу</button>
     </div>
   </div>
 

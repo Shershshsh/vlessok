@@ -1,17 +1,21 @@
 // ============================================================
-// connections.js — Логика окна "Монитор соединений" v2
+// connections.js — Логика окна "Монитор соединений" v2.1
 // ============================================================
 
 let ws = null;
 let currentConnections = [];
-let currentSort = 'time'; // time, traffic, process
+// Состояния сортировки: 'desc', 'asc', 'none'
+let sortState = {
+  time: 'desc',
+  traffic: 'none',
+  process: 'none'
+};
+let currentSort = 'time';
 
 const listContainer = document.getElementById('connections-list');
 const filterProcess = document.getElementById('filter-process');
 const filterDomain = document.getElementById('filter-domain');
 const filterRoute = document.getElementById('filter-route');
-const btnClear = document.getElementById('btn-clear');
-const datalistProcesses = document.getElementById('active-processes');
 const activeCountSpan = document.getElementById('active-count');
 const sortBtns = document.querySelectorAll('.sort-btn');
 
@@ -41,18 +45,61 @@ function getProcessName(path) {
   return parts[parts.length - 1];
 }
 
-// Обновление Datalist
-function updateProcessDatalist() {
+function isSystemProcess(name) {
+  return name === 'Служба ОС' || name.toLowerCase().includes('svchost');
+}
+
+// Обновление Select (вместо Datalist)
+function updateProcessSelect() {
   const uniqueProcesses = new Set();
   currentConnections.forEach(c => {
+    // Не добавляем системные процессы в фильтр для чистоты, или добавляем все? Добавим все.
     uniqueProcesses.add(getProcessName(c.metadata?.processPath));
   });
   
-  datalistProcesses.innerHTML = '';
+  const currentVal = filterProcess.value;
+  filterProcess.innerHTML = '<option value="">Все процессы</option>';
+  
   Array.from(uniqueProcesses).sort().forEach(proc => {
     const option = document.createElement('option');
     option.value = proc;
-    datalistProcesses.appendChild(option);
+    option.textContent = proc;
+    filterProcess.appendChild(option);
+  });
+  
+  // Восстанавливаем выбор, если он все еще актуален
+  if (currentVal && uniqueProcesses.has(currentVal)) {
+    filterProcess.value = currentVal;
+  } else if (currentVal) {
+    // Если процесс закрылся, оставляем его в списке искусственно, чтобы фильтр не сбрасывался сам по себе
+    const option = document.createElement('option');
+    option.value = currentVal;
+    option.textContent = currentVal;
+    filterProcess.appendChild(option);
+    filterProcess.value = currentVal;
+  }
+}
+
+// Обновление UI кнопок сортировки
+function updateSortButtonsUI() {
+  sortBtns.forEach(btn => {
+    const type = btn.dataset.sort;
+    const dir = sortState[type];
+    
+    // Сбрасываем текст
+    if (type === 'time') btn.textContent = 'По времени';
+    if (type === 'traffic') btn.textContent = 'По трафику';
+    if (type === 'process') btn.textContent = 'По процессу';
+
+    if (dir === 'desc') {
+      btn.textContent += ' ⬇';
+      btn.classList.add('active');
+    } else if (dir === 'asc') {
+      btn.textContent += ' ⬆';
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
   });
 }
 
@@ -63,12 +110,14 @@ function renderList() {
     const dFilter = filterDomain.value.toLowerCase();
     const rFilter = filterRoute.value;
 
-    // Обновляем список доступных процессов (но не прерываем ввод пользователя)
     if (document.activeElement !== filterProcess) {
-        updateProcessDatalist();
+        updateProcessSelect();
     }
 
     let filtered = currentConnections.filter(c => {
+      // Игнорируем DNS (порт 53)
+      if (c.metadata?.destinationPort === 53) return false;
+      
       const process = getProcessName(c.metadata?.processPath).toLowerCase();
       const host = (c.metadata?.host || c.metadata?.destinationIP || '').toLowerCase();
       let route = (c.chains && c.chains.length > 0 ? c.chains[0] : 'unknown').toLowerCase();
@@ -76,7 +125,7 @@ function renderList() {
       // Игнорируем block
       if (route.includes('block')) return false;
       
-      if (pFilter && !process.includes(pFilter)) return false;
+      if (pFilter && process !== pFilter) return false; // Точное совпадение по селекту
       if (dFilter && !host.includes(dFilter)) return false;
       
       if (rFilter === 'proxy' && !route.includes('proxy') && !route.includes('vless')) return false;
@@ -87,20 +136,37 @@ function renderList() {
 
     // Сортировка
     filtered.sort((a, b) => {
+      const procA_name = getProcessName(a.metadata?.processPath);
+      const procB_name = getProcessName(b.metadata?.processPath);
+      const isSysA = isSystemProcess(procA_name) ? 1 : 0;
+      const isSysB = isSystemProcess(procB_name) ? 1 : 0;
+
+      // Первичная сортировка: Обычные приложения всегда выше системных
+      if (isSysA !== isSysB) {
+        return isSysA - isSysB; // 0 (App) перед 1 (System)
+      }
+
+      // Вторичная сортировка в зависимости от выбранного режима
+      const dir = sortState[currentSort];
+      if (dir === 'none') return 0; // Сохраняем группировку Apps/System
+      
+      const modifier = dir === 'desc' ? -1 : 1;
+
       if (currentSort === 'traffic') {
         const trafficA = (a.upload || 0) + (a.download || 0);
         const trafficB = (b.upload || 0) + (b.download || 0);
-        return trafficB - trafficA; // по убыванию
+        return (trafficA - trafficB) * modifier;
       }
       if (currentSort === 'process') {
-        const procA = getProcessName(a.metadata?.processPath).toLowerCase();
-        const procB = getProcessName(b.metadata?.processPath).toLowerCase();
-        return procA.localeCompare(procB); // А-Я
+        return procA_name.localeCompare(procB_name) * modifier;
       }
-      // по времени (по умолчанию)
-      const timeA = new Date(a.start).getTime();
-      const timeB = new Date(b.start).getTime();
-      return timeA - timeB; // старые сверху
+      if (currentSort === 'time') {
+        const timeA = new Date(a.start).getTime();
+        const timeB = new Date(b.start).getTime();
+        return (timeA - timeB) * modifier;
+      }
+      
+      return 0;
     });
 
     // Обновление счетчика
@@ -119,7 +185,7 @@ function renderList() {
       const card = document.createElement('div');
       card.className = 'conn-card';
 
-      // 1-я строка: Домен/IP:Порт и Время
+      // 1-я строка
       const row1 = document.createElement('div');
       row1.className = 'conn-row';
       
@@ -136,7 +202,7 @@ function renderList() {
       row1.appendChild(domainBox);
       row1.appendChild(timeBox);
 
-      // 2-я строка: Процесс+Сеть и Трафик
+      // 2-я строка
       const row2 = document.createElement('div');
       row2.className = 'conn-row';
       
@@ -155,7 +221,7 @@ function renderList() {
       row2.appendChild(processBox);
       row2.appendChild(trafficBox);
 
-      // 3-я строка: Правило и Маршрут
+      // 3-я строка
       const row3 = document.createElement('div');
       row3.className = 'conn-row';
       row3.style.marginTop = '2px';
@@ -224,26 +290,30 @@ function connectWebSocket() {
 }
 
 // Слушатели фильтров
-filterProcess.addEventListener('input', renderList);
+filterProcess.addEventListener('change', renderList);
 filterDomain.addEventListener('input', renderList);
 filterRoute.addEventListener('change', renderList);
 
-// Слушатели сортировки
+// Слушатели сортировки (Цикл: desc -> asc -> none)
 sortBtns.forEach(btn => {
   btn.addEventListener('click', (e) => {
-    sortBtns.forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    currentSort = e.target.dataset.sort;
+    const type = e.target.dataset.sort;
+    
+    // Если кликнули на другую колонку, сбрасываем остальные в none
+    if (currentSort !== type) {
+      sortState[currentSort] = 'none';
+      currentSort = type;
+      sortState[type] = 'desc';
+    } else {
+      // Переключаем текущую
+      if (sortState[type] === 'desc') sortState[type] = 'asc';
+      else if (sortState[type] === 'asc') sortState[type] = 'none';
+      else sortState[type] = 'desc';
+    }
+    
+    updateSortButtonsUI();
     renderList();
   });
-});
-
-// Кнопка очистки
-btnClear.addEventListener('click', () => {
-  if(!confirm('Принудительно закрыть все текущие соединения? Это может прервать активные загрузки.')) return;
-  currentConnections = [];
-  renderList();
-  fetch('http://127.0.0.1:9090/connections', { method: 'DELETE' }).catch(console.error);
 });
 
 // Запуск
