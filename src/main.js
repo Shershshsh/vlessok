@@ -7,7 +7,12 @@
 
 // Получаем функции из Tauri
 const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
 const dialog = window.__TAURI__.plugin?.dialog || window.__TAURI__.dialog;
+
+listen('singbox-error', (event) => {
+  addLog(`❌ [SingBox]: ${event.payload}`, 'error');
+});
 
 // ============================================================
 // Ссылки на DOM-элементы
@@ -828,8 +833,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Профили
     loadProfiles();
-    bindEvent(profileSelect, 'change', () => {
+    bindEvent(profileSelect, 'change', async () => {
       localStorage.setItem('vlessok_last_profile_id', profileSelect.value);
+      const isConnected = await invoke('is_connected');
+      if (isConnected) {
+        await autoReconnect();
+      }
     });
     bindEvent(btnAddProfile, 'click', () => openProfileModal(null));
     bindEvent(btnEditProfile, 'click', () => openProfileModal(profileSelect.value));
@@ -843,6 +852,21 @@ window.addEventListener('DOMContentLoaded', () => {
       bindEvent(btnRefreshPing, 'click', () => {
         const url = getSelectedVlessUrl();
         if (url) doCheckPing(url);
+      });
+    }
+
+    // Автоматическое заполнение имени профиля при вставке ссылки
+    if (profileUrlInput) {
+      bindEvent(profileUrlInput, 'input', () => {
+        const val = profileUrlInput.value.trim();
+        if (val.startsWith('vless://') && !profileNameInput.value.trim()) {
+          const idx = val.indexOf('#');
+          if (idx !== -1) {
+            let name = val.substring(idx + 1).trim();
+            try { name = decodeURIComponent(name); } catch(e) {}
+            if (name) profileNameInput.value = name;
+          }
+        }
       });
     }
 

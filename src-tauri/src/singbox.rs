@@ -79,7 +79,7 @@ impl SingBoxManager {
 
     /// Запускает sing-box с переданным JSON-конфигом.
     /// Если уже запущен — сначала останавливает старый процесс.
-    pub fn start(&self, config_json: String) -> Result<(), String> {
+    pub fn start(&self, config_json: String, app: tauri::AppHandle) -> Result<(), String> {
         // Если процесс уже запущен — остановить
         if self.is_running() {
             warn!("sing-box уже запущен, останавливаем перед повторным запуском");
@@ -174,8 +174,10 @@ impl SingBoxManager {
         }
 
         if let Some(stderr) = child.stderr.take() {
+            let app_clone = app.clone();
             thread::spawn(move || {
                 use std::io::{BufRead, BufReader};
+                use tauri::Emitter;
                 let reader = BufReader::new(stderr);
                 for line in reader.lines() {
                     match line {
@@ -183,6 +185,7 @@ impl SingBoxManager {
                             // sing-box пишет в stderr нормальные логи, не только ошибки
                             if l.contains("ERROR") || l.contains("error") {
                                 error!("[sing-box] {}", l);
+                                let _ = app_clone.emit("singbox-error", l.clone());
                             } else {
                                 info!("[sing-box] {}", l);
                             }

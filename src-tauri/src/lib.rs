@@ -61,7 +61,8 @@ fn connect_vless(
     let manager = state.manager.lock()
         .map_err(|e| format!("Внутренняя ошибка (mutex): {}", e))?;
 
-    manager.start(config_json)
+    let app_handle_clone = app_handle.clone();
+    manager.start(config_json, app_handle_clone)
         .map_err(|e| format!("Ошибка запуска sing-box: {}", e))?;
 
     Ok("connected".to_string())
