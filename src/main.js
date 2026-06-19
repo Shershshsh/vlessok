@@ -401,6 +401,10 @@ async function autoReconnect() {
     if (isConnected) {
       addLog('🔄 Применяем новые правила (перезапуск)...', 'info');
       await handleDisconnect();
+      
+      // Задержка 1.5 сек перед переподключением, чтобы ОС успела освободить TUN и маршруты
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
       await handleConnect();
     }
   } catch(e) {}

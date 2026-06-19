@@ -339,7 +339,6 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
 
                         if geo_rule == "telegram_combo" {
                             let url_domain = "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-telegram.srs";
-                            let url_ip = "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-telegram.srs";
                             rule_sets.push(json!({
                                 "tag": "geosite-telegram",
                                 "type": "remote",
@@ -347,15 +346,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "url": url_domain,
                                 "download_detour": "direct"
                             }));
-                            rule_sets.push(json!({
-                                "tag": "geoip-telegram",
-                                "type": "remote",
-                                "format": "binary",
-                                "url": url_ip,
-                                "download_detour": "direct"
-                            }));
                             proxy_tags.push("geosite-telegram".to_string());
-                            proxy_tags.push("geoip-telegram".to_string());
                             continue;
                         }
 
