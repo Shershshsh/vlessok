@@ -177,7 +177,7 @@ function renderList() {
        if (routeName.includes('proxy') || routeName.includes('vless')) proxyCount++;
        else directCount++;
     });
-    activeCountSpan.textContent = `VPN: ${proxyCount} | DIRECT: ${directCount}`;
+    activeCountSpan.innerHTML = `<span style="color: var(--vpn-color);">VPN: ${proxyCount}</span> <span style="color: var(--border);">|</span> <span style="color: var(--direct-color);">DIRECT: ${directCount}</span>`;
 
     listContainer.innerHTML = '';
 

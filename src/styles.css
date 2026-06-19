@@ -27,11 +27,14 @@
   --danger:       #e74c3c;
   --danger-dim:   rgba(231, 76, 60, 0.15);
   --border:       #1e2d4a;
-  --border-accent: rgba(78, 204, 163, 0.4);
+  --border-accent: #555555;
 
   /* Статусы */
-  --connected-color:    #4ecca3;
+  --connected-color:    #2ecc71;
   --disconnected-color: #e74c3c;
+  
+  --vpn-color: #a855f7;
+  --direct-color: #22c55e;
 }
 
 body {
@@ -629,7 +632,7 @@ body {
   color: var(--text-muted);
   font-size: 0.8rem;
   cursor: pointer;
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 .btn-text:hover {

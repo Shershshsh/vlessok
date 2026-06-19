@@ -301,7 +301,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
             "type": "remote",
             "format": "binary",
             "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-            "download_detour": "direct"
+            "download_detour": "proxy"
         }));
         route_rules.push(json!({
             "rule_set": ["geosite-category-ads-all"],
@@ -364,7 +364,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "type": "remote",
                                 "format": "binary",
                                 "url": url_domain,
-                                "download_detour": "direct"
+                                "download_detour": "proxy"
                             }));
                             proxy_tags.push("geosite-telegram".to_string());
                             continue;
@@ -377,7 +377,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "type": "remote",
                                 "format": "binary",
                                 "url": url_domain,
-                                "download_detour": "direct"
+                                "download_detour": "proxy"
                             }));
                             proxy_tags.push("geosite-discord".to_string());
                             continue;
@@ -401,7 +401,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                             "type": "remote",
                             "format": "binary",
                             "url": url,
-                            "download_detour": "direct"
+                            "download_detour": "proxy"
                         }));
                     }
                     if !proxy_tags.is_empty() {

@@ -325,9 +325,10 @@ function setConnecting() {
 async function pollStatus() {
   try {
     const running = await invoke('is_connected');
-    if (statusText && statusText.textContent !== 'ПОДКЛЮЧЕНО' && statusText.textContent !== 'ОТКЛЮЧЕНО') {
-      if (running) setConnected();
-      else setDisconnected();
+    if (running && statusText && statusText.textContent !== 'ПОДКЛЮЧЕНО') {
+      setConnected();
+    } else if (!running && statusText && statusText.textContent !== 'ОТКЛЮЧЕНО' && statusText.textContent !== 'ПОДКЛЮЧЕНИЕ...') {
+      setDisconnected();
     }
   } catch (e) {
     console.warn('Ошибка опроса статуса:', e);
@@ -896,7 +897,8 @@ window.addEventListener('DOMContentLoaded', () => {
       catch (e) { addLog(`❌ Ошибка: ${e}`, 'error'); }
     });
     bindEvent(btnResetNetwork, 'click', async () => {
-      if (!confirm('Вы уверены, что хотите сбросить настройки сети? Это может временно прервать соединения.')) return;
+      const yes = await dialog.ask('Вы уверены, что хотите сбросить настройки сети? Это может временно прервать соединения.', { title: 'Сброс сети', type: 'warning' });
+      if (!yes) return;
       addLog('🔄 Сбрасываем сетевые настройки...', 'info');
       try {
         const res = await invoke('reset_network');

@@ -29,10 +29,10 @@ body {
 .active-count {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-dim);
+  background: var(--bg-input);
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
 }
 
 .filters-row {
