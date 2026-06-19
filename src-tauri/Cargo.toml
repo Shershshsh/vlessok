@@ -1,6 +1,6 @@
 [package]
 name = "vlessok"
-version = "1.0.3"
+version = "1.0.4"
 description = "Минималистичный VPN-клиент для VLESS+Reality+Vision"
 authors = ["shershshsh"]
 edition = "2021"

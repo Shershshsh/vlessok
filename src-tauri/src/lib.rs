@@ -184,6 +184,28 @@ fn get_current_external_ip() -> Result<String, String> {
     Err("Не удалось определить IP".to_string())
 }
 
+#[tauri::command]
+fn check_ping(url: String) -> Result<u64, String> {
+    use url::Url;
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::{Instant, Duration};
+
+    let parsed = Url::parse(&url).map_err(|e| format!("Invalid URL: {}", e))?;
+    let host = parsed.host_str().ok_or("No host in URL")?;
+    let port = parsed.port().ok_or("No port in URL")?;
+
+    let addr_str = format!("{}:{}", host, port);
+    let mut addrs = addr_str.to_socket_addrs().map_err(|e| format!("DNS resolution failed: {}", e))?;
+    let addr = addrs.next().ok_or("Could not resolve address")?;
+
+    let start = Instant::now();
+    let timeout = Duration::from_secs(3);
+    match TcpStream::connect_timeout(&addr, timeout) {
+        Ok(_) => Ok(start.elapsed().as_millis() as u64),
+        Err(e) => Err(format!("Connection failed: {}", e)),
+    }
+}
+
 // ============================================================
 // Команды маршрутизации
 // ============================================================
@@ -544,7 +566,8 @@ pub fn run() {
             remove_process_rule,
             set_all_routing_rules,
             get_running_processes,
-            get_process_icons_batched
+            get_process_icons_batched,
+            check_ping
         ])
         .run(tauri::generate_context!())
         .expect("Ошибка при запуске приложения vlessok");

@@ -12,7 +12,16 @@ const dialog = window.__TAURI__.plugin?.dialog || window.__TAURI__.dialog;
 // ============================================================
 // Ссылки на DOM-элементы
 // ============================================================
-let vlessUrlInput;
+let profileSelect;
+let btnAddProfile;
+let btnEditProfile;
+let btnDeleteProfile;
+let profileModal;
+let profileNameInput;
+let profileUrlInput;
+let btnSaveProfile;
+let btnCancelProfile;
+
 let btnConnect;
 let btnDisconnect;
 let statusDot;
@@ -26,6 +35,8 @@ let btnCancelModal;
 let connectionInfo;
 let externalIpSpan;
 let serverNameSpan;
+let serverPingSpan;
+let btnRefreshPing;
 let btnResetNetwork;
 
 // Элементы маршрутизации
@@ -119,6 +130,125 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ============================================================
+// Управление профилями VLESS
+// ============================================================
+let profiles = [];
+let editingProfileId = null;
+
+function loadProfiles() {
+  try {
+    const data = localStorage.getItem('vlessok_profiles');
+    if (data) profiles = JSON.parse(data);
+  } catch(e) {}
+  if (!Array.isArray(profiles)) profiles = [];
+  renderProfiles();
+}
+
+function saveProfiles() {
+  localStorage.setItem('vlessok_profiles', JSON.stringify(profiles));
+}
+
+function renderProfiles() {
+  if (!profileSelect) return;
+  const currentVal = profileSelect.value;
+  profileSelect.innerHTML = '';
+  
+  if (profiles.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = "";
+    opt.textContent = "Нет профилей";
+    profileSelect.appendChild(opt);
+    if(btnConnect) btnConnect.disabled = true;
+    if(btnEditProfile) btnEditProfile.disabled = true;
+    if(btnDeleteProfile) btnDeleteProfile.disabled = true;
+  } else {
+    profiles.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name || 'Без имени';
+      profileSelect.appendChild(opt);
+    });
+    // Восстанавливаем выбор
+    let lastId = currentVal || localStorage.getItem('vlessok_last_profile_id');
+    if (profiles.find(p => p.id === lastId)) {
+      profileSelect.value = lastId;
+    } else {
+      profileSelect.value = profiles[0].id;
+    }
+    localStorage.setItem('vlessok_last_profile_id', profileSelect.value);
+    
+    if(btnConnect && statusText && statusText.textContent === 'Отключено') btnConnect.disabled = false;
+    if(btnEditProfile) btnEditProfile.disabled = false;
+    if(btnDeleteProfile) btnDeleteProfile.disabled = false;
+  }
+}
+
+function openProfileModal(editId = null) {
+  if (editId === null && profiles.length >= 5) {
+    addLog('❌ Можно создать максимум 5 профилей', 'error');
+    return;
+  }
+  editingProfileId = editId;
+  const title = getEl('profile-modal-title');
+  if (title) title.textContent = editId ? 'Редактировать профиль' : 'Новый профиль';
+  
+  if (editId) {
+    const p = profiles.find(x => x.id === editId);
+    if (p) {
+      profileNameInput.value = p.name;
+      profileUrlInput.value = p.url;
+    }
+  } else {
+    profileNameInput.value = '';
+    profileUrlInput.value = '';
+  }
+  if (profileModal) profileModal.classList.remove('hidden');
+}
+
+function closeProfileModal() {
+  if (profileModal) profileModal.classList.add('hidden');
+  editingProfileId = null;
+}
+
+function saveProfile() {
+  const name = profileNameInput.value.trim();
+  const url = profileUrlInput.value.trim();
+  if (!url || !url.startsWith('vless://')) {
+    addLog('❌ Ошибка: Укажите корректную vless:// ссылку', 'error');
+    return;
+  }
+  
+  if (editingProfileId) {
+    const p = profiles.find(x => x.id === editingProfileId);
+    if (p) {
+      p.name = name || 'Без имени';
+      p.url = url;
+    }
+  } else {
+    const id = Date.now().toString();
+    profiles.push({ id, name: name || 'Без имени', url });
+    localStorage.setItem('vlessok_last_profile_id', id);
+  }
+  saveProfiles();
+  renderProfiles();
+  closeProfileModal();
+}
+
+function deleteProfile() {
+  const id = profileSelect.value;
+  if (!id) return;
+  profiles = profiles.filter(p => p.id !== id);
+  saveProfiles();
+  renderProfiles();
+}
+
+function getSelectedVlessUrl() {
+  const id = profileSelect.value;
+  const p = profiles.find(x => x.id === id);
+  return p ? p.url : null;
+}
+
+// ============================================================
 // Вспомогательные функции
 // ============================================================
 function getEl(id) {
@@ -194,12 +324,22 @@ async function pollStatus() {
 // ============================================================
 // Обработчики подключения
 // ============================================================
+async function doCheckPing(url) {
+  if (!serverPingSpan) return;
+  serverPingSpan.textContent = '...';
+  try {
+    const ping = await invoke('check_ping', { url });
+    serverPingSpan.textContent = `${ping} мс`;
+  } catch (err) {
+    serverPingSpan.textContent = `Ошибка`;
+  }
+}
+
 async function handleConnect() {
-  if (!vlessUrlInput) return;
-  const url = vlessUrlInput.value.trim();
+  const url = getSelectedVlessUrl();
 
   if (!url) {
-    addLog('❌ Вставьте VLESS-ссылку в поле', 'error');
+    addLog('❌ Выберите или добавьте профиль VLESS', 'error');
     return;
   }
   if (!url.startsWith('vless://')) {
@@ -245,6 +385,9 @@ async function handleConnect() {
 
       if (externalIpSpan) externalIpSpan.textContent = "Определяем...";
       if (connectionInfo) connectionInfo.classList.remove('hidden');
+      
+      // Запускаем замер пинга в фоне
+      doCheckPing(url);
 
       try {
         const ip = await invoke('get_current_external_ip');
@@ -629,7 +772,16 @@ function openMassImport(type, cmd, arg) {
 window.addEventListener('DOMContentLoaded', () => {
   try {
     // Находим элементы (оригинальные)
-    vlessUrlInput    = getEl('vless-url');
+    profileSelect    = getEl('profile-select');
+    btnAddProfile    = getEl('btn-add-profile');
+    btnEditProfile   = getEl('btn-edit-profile');
+    btnDeleteProfile = getEl('btn-delete-profile');
+    profileModal     = getEl('profile-modal');
+    profileNameInput = getEl('profile-name');
+    profileUrlInput  = getEl('profile-url');
+    btnSaveProfile   = getEl('btn-save-profile');
+    btnCancelProfile = getEl('btn-cancel-profile');
+
     btnConnect       = getEl('btn-connect');
     btnDisconnect    = getEl('btn-disconnect');
     statusDot        = getEl('status-dot');
@@ -643,6 +795,8 @@ window.addEventListener('DOMContentLoaded', () => {
     connectionInfo   = getEl('connection-info');
     externalIpSpan   = getEl('external-ip');
     serverNameSpan   = getEl('server-name');
+    serverPingSpan   = getEl('server-ping');
+    btnRefreshPing   = getEl('btn-refresh-ping');
     btnResetNetwork  = getEl('btn-reset-network');
 
     // Находим элементы маршрутизации
@@ -672,12 +826,23 @@ window.addEventListener('DOMContentLoaded', () => {
     btnPickProcess = getEl('btn-pick-process');
     listProcesses  = getEl('list-processes');
 
-    // Восстановление VLESS URL
-    if (vlessUrlInput) {
-      const lastUrl = localStorage.getItem('vlessok_last_url');
-      if (lastUrl) vlessUrlInput.value = lastUrl;
-      bindEvent(vlessUrlInput, 'input', () => {
-        localStorage.setItem('vlessok_last_url', vlessUrlInput.value);
+    // Профили
+    loadProfiles();
+    bindEvent(profileSelect, 'change', () => {
+      localStorage.setItem('vlessok_last_profile_id', profileSelect.value);
+    });
+    bindEvent(btnAddProfile, 'click', () => openProfileModal(null));
+    bindEvent(btnEditProfile, 'click', () => openProfileModal(profileSelect.value));
+    bindEvent(btnDeleteProfile, 'click', async () => {
+      const yes = await dialog.ask('Точно удалить этот профиль?', { title: 'Удаление', type: 'warning' });
+      if (yes) deleteProfile();
+    });
+    bindEvent(btnCancelProfile, 'click', closeProfileModal);
+    bindEvent(btnSaveProfile, 'click', saveProfile);
+    if (btnRefreshPing) {
+      bindEvent(btnRefreshPing, 'click', () => {
+        const url = getSelectedVlessUrl();
+        if (url) doCheckPing(url);
       });
     }
 

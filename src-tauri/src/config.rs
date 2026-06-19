@@ -288,6 +288,19 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
         // rule_sets хранит источники внешних списков (SRS или локальные JSON)
         let mut rule_sets = vec![];
         
+        // --- 0. Блокировка рекламы (category-ads-all) ---
+        rule_sets.push(json!({
+            "tag": "geosite-category-ads-all",
+            "type": "remote",
+            "format": "binary",
+            "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+            "download_detour": "direct"
+        }));
+        route_rules.push(json!({
+            "rule_set": ["geosite-category-ads-all"],
+            "outbound": "block"
+        }));
+        
         // --- 1. Обязательный outside-pack (всегда идёт напрямую) ---
         // Добавляем источник только если файл существует
         if outside_path.exists() {

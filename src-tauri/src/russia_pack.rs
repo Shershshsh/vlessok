@@ -50,7 +50,9 @@ fn save_merged_rule_set(base_text: &str, remote_text: &str, path: &PathBuf) -> R
     for line in base_text.lines().chain(remote_text.lines()) {
         let trimmed = line.trim();
         if !trimmed.is_empty() && !trimmed.starts_with('#') {
-            domains_set.insert(trimmed.to_string());
+            if !trimmed.ends_with(".ua") {
+                domains_set.insert(trimmed.to_string());
+            }
         }
     }
 

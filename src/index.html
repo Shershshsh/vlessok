@@ -99,18 +99,16 @@
       </div>
 
       <!-- ====================================================== -->
-      <!-- ПОЛЕ ВВОДА VLESS-URL                                  -->
+      <!-- ПОЛЕ ВВОДА VLESS-URL (ПРОФИЛИ)                        -->
       <!-- ====================================================== -->
       <div class="input-block">
-        <label for="vless-url" class="input-label">VLESS-ссылка</label>
-        <textarea
-          id="vless-url"
-          class="vless-input"
-          placeholder="vless://UUID@server:port?security=reality&pbk=...&sni=...#Имя"
-          rows="4"
-          spellcheck="false"
-          autocomplete="off"
-        ></textarea>
+        <label class="input-label">Профиль VLESS</label>
+        <div class="profile-header">
+          <select id="profile-select" class="rule-input"></select>
+          <button id="btn-add-profile" class="btn btn-add" title="Добавить профиль">+</button>
+          <button id="btn-edit-profile" class="btn btn-secondary" title="Редактировать профиль">✎</button>
+          <button id="btn-delete-profile" class="btn btn-disconnect" title="Удалить профиль">✕</button>
+        </div>
       </div>
 
       <!-- ====================================================== -->
@@ -120,17 +118,26 @@
 
       <!-- ИНФО-БЛОК ПОДКЛЮЧЕНИЯ (Скрыт по умолчанию) -->
       <div id="connection-info" class="connection-info hidden">
-        <div class="info-row">
-          <span class="info-label">Состояние:</span>
-          <span class="info-value status-protected">🟢 Защищён</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Внешний IP:</span>
-          <span id="external-ip" class="info-value">Загрузка...</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Сервер:</span>
-          <span id="server-name" class="info-value">...</span>
+        <div class="info-grid">
+          <div class="info-cell">
+            <span class="info-label">Состояние:</span>
+            <span class="info-value status-protected">🟢 Защищён</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-label">Ваш IP:</span>
+            <span id="external-ip" class="info-value">Загрузка...</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-label">Сервер:</span>
+            <span id="server-name" class="info-value">...</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-label">Пинг:</span>
+            <span class="info-value">
+              <span id="server-ping">...</span> 
+              <button id="btn-refresh-ping" class="btn-icon" title="Обновить пинг">🔄</button>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -161,7 +168,7 @@
       </div>
 
       <div class="app-footer">
-        <p>Версия 1.0.3</p>
+        <p>Версия 1.0.4</p>
         <div class="footer-actions">
           <button id="btn-reset-network" class="btn-text">Сбросить настройки сети</button>
         </div>
@@ -205,6 +212,32 @@
         </div>
         <div class="modal-actions" style="margin-top: 15px;">
           <button id="btn-process-picker-cancel" class="btn-text">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно профиля VLESS -->
+    <div id="profile-modal" class="modal-overlay hidden">
+      <div class="modal-content" style="max-width: 600px;">
+        <h3 id="profile-modal-title">Новый профиль</h3>
+        <div class="input-block" style="margin-bottom: 15px;">
+          <label class="input-label">Имя профиля</label>
+          <input type="text" id="profile-name" class="rule-input" placeholder="Мой сервер">
+        </div>
+        <div class="input-block">
+          <label class="input-label">VLESS-ссылка</label>
+          <textarea
+            id="profile-url"
+            class="vless-input"
+            placeholder="vless://UUID@server:port?security=reality&pbk=...&sni=...#Имя"
+            rows="4"
+            spellcheck="false"
+            autocomplete="off"
+          ></textarea>
+        </div>
+        <div class="modal-actions" style="margin-top: 20px;">
+          <button id="btn-save-profile" class="btn btn-connect">Сохранить</button>
+          <button id="btn-cancel-profile" class="btn-text">Отмена</button>
         </div>
       </div>
     </div>
