@@ -460,9 +460,17 @@ fn get_process_icons_batched(process_names: Vec<String>, state: State<'_, AppSta
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Инициализируем логирование
-    // В дев-режиме покажет все логи. Можно настроить через RUST_LOG=debug
-    if let Ok(log_file) = std::fs::File::create("vlessok_debug.log") {
+    // Создаем директорию logs если её нет
+    let logs_dir = std::path::Path::new("logs");
+    if !logs_dir.exists() {
+        let _ = std::fs::create_dir_all(logs_dir);
+    }
+
+    // Формируем имя файла с датой и временем
+    let now = chrono::Local::now();
+    let log_filename = format!("logs/vlessok_{}.log", now.format("%Y%m%d_%H%M%S"));
+
+    if let Ok(log_file) = std::fs::File::create(&log_filename) {
         env_logger::Builder::from_env(
             env_logger::Env::default().default_filter_or("debug")
         )

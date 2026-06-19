@@ -55,22 +55,12 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
 
-    // --- SNI (server_name) — обязательный параметр для Reality ---
-    let sni = params
-        .get("sni")
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            "Параметр 'sni' не найден или пустой. \
-             Reality требует SNI (например, sni=www.google.com)".to_string()
-        })?
-        .clone();
+    // --- SNI (server_name) ---
+    // Для reality обязателен, для других - может быть.
+    let sni = params.get("sni").filter(|s| !s.is_empty()).cloned().unwrap_or_default();
 
     // --- Public Key для Reality ---
-    let public_key = params
-        .get("pbk")
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| "Параметр 'pbk' (public key) не найден в URL".to_string())?
-        .clone();
+    let public_key = params.get("pbk").filter(|s| !s.is_empty()).cloned().unwrap_or_default();
 
     // --- Short ID для Reality ---
     // sid может быть пустой строкой — это допустимо
@@ -106,21 +96,32 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
     // ============================================================
 
     // Блок TLS + Reality для outbound
-    let tls_block = json!({
-        "enabled": true,
-        "server_name": sni,
-        // uTLS — имитирует TLS-рукопожатие реального браузера
-        "utls": {
+    let security = params.get("security").map(|s| s.as_str()).unwrap_or("none");
+    
+    let tls_block = if security == "none" || security == "" {
+        json!({
+            "enabled": false
+        })
+    } else {
+        let mut t = json!({
             "enabled": true,
-            "fingerprint": fingerprint
-        },
+            "server_name": sni,
+            // uTLS — имитирует TLS-рукопожатие реального браузера
+            "utls": {
+                "enabled": true,
+                "fingerprint": fingerprint
+            }
+        });
         // Reality — параметры для обхода DPI
-        "reality": {
-            "enabled": true,
-            "public_key": public_key,
-            "short_id": short_id
+        if security == "reality" {
+            t["reality"] = json!({
+                "enabled": true,
+                "public_key": public_key,
+                "short_id": short_id
+            });
         }
-    });
+        t
+    };
 
     // Outbound (исходящий) для VLESS
     // Если flow задан — добавляем его, иначе не включаем поле
@@ -337,23 +338,34 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                         }
 
                         if geo_rule == "telegram_combo" {
+                            let url_domain = "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-telegram.srs";
+                            let url_ip = "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-telegram.srs";
                             rule_sets.push(json!({
                                 "tag": "geosite-telegram",
                                 "type": "remote",
                                 "format": "binary",
-                                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-telegram.srs",
+                                "url": url_domain,
+                                "download_detour": "direct"
+                            }));
+                            rule_sets.push(json!({
+                                "tag": "geoip-telegram",
+                                "type": "remote",
+                                "format": "binary",
+                                "url": url_ip,
                                 "download_detour": "direct"
                             }));
                             proxy_tags.push("geosite-telegram".to_string());
+                            proxy_tags.push("geoip-telegram".to_string());
                             continue;
                         }
 
                         if geo_rule == "discord_combo" {
+                            let url_domain = "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-discord.srs";
                             rule_sets.push(json!({
                                 "tag": "geosite-discord",
                                 "type": "remote",
                                 "format": "binary",
-                                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-discord.srs",
+                                "url": url_domain,
                                 "download_detour": "direct"
                             }));
                             proxy_tags.push("geosite-discord".to_string());
@@ -487,12 +499,12 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_sni_returns_error() {
+    fn test_missing_sni_reality_still_parses_but_no_sni() {
         let app_dir = Path::new("");
         let url_without_sni = "vless://550e8400-e29b-41d4-a716-446655440000@1.2.3.4:443\
             ?security=reality&pbk=key123";
         let result = vless_url_to_singbox_config(url_without_sni, None, &app_dir);
-        assert!(result.is_err(), "URL без SNI должен возвращать ошибку");
+        assert!(result.is_ok(), "URL без SNI должен теперь парситься нормально");
     }
 
     #[test]
