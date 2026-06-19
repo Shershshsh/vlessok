@@ -1,47 +1,53 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Монитор соединений</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="connections.css">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="connections.css" />
 </head>
-<body style="margin: 0; padding: 0; background: #0f0f1a; color: #e2e8f0; font-family: sans-serif;">
-  <div class="connections-container" style="background: #0f0f1a;">
-    <div class="connections-header">
-      <h2>🌐 Монитор соединений</h2>
-      <div class="filters">
-        <input type="text" id="filter-process" placeholder="Поиск по процессу...">
-        <input type="text" id="filter-domain" placeholder="Поиск по домену/IP...">
-        <select id="filter-type">
-          <option value="all">Все маршруты</option>
-          <option value="proxy">Proxy</option>
-          <option value="direct">Direct</option>
-          <option value="block">Block</option>
+<body style="background: var(--bg); color: var(--text); overflow-y: hidden;">
+
+  <div class="connections-header">
+    <div class="header-top">
+      <h2>Монитор соединений</h2>
+      <span class="active-count" id="active-count">VPN: 0 | DIRECT: 0</span>
+    </div>
+    
+    <div class="filters-row">
+      <div class="search-box">
+        <input type="text" id="filter-domain" placeholder="Поиск по домену/IP..." />
+      </div>
+      <div class="search-box">
+        <input type="text" id="filter-process" list="active-processes" placeholder="Поиск по процессу..." />
+        <datalist id="active-processes"></datalist>
+      </div>
+      <div class="search-box route-filter-box">
+        <select id="filter-route">
+          <option value="">Все маршруты</option>
+          <option value="proxy">Только VPN</option>
+          <option value="direct">Только Direct</option>
         </select>
-        <button id="btn-clear-connections" class="btn btn-secondary">Очистить</button>
       </div>
     </div>
-    <div class="table-wrapper">
-      <table id="connections-table">
-        <thead>
-          <tr>
-            <th>Процесс</th>
-            <th>Домен / IP</th>
-            <th>Маршрут</th>
-            <th>Правило</th>
-            <th>DL / UL</th>
-            <th>Время</th>
-          </tr>
-        </thead>
-        <tbody id="connections-body">
-          <!-- Данные будут здесь -->
-        </tbody>
-      </table>
+
+    <div class="sort-actions">
+      <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 10px;">Сортировка:</span>
+      <button class="sort-btn active" data-sort="time">По времени</button>
+      <button class="sort-btn" data-sort="traffic">По трафику</button>
+      <button class="sort-btn" data-sort="process">По процессу</button>
+      <div style="flex: 1"></div>
+      <button id="btn-clear" class="btn-clear" title="Принудительно закрыть все открытые сокеты (может разорвать активные загрузки)">Закрыть все соединения</button>
     </div>
   </div>
 
-  <script src="connections.js"></script>
+  <div class="connections-list-wrapper">
+    <div id="connections-list" class="connections-list">
+      <!-- Cards will be injected here -->
+    </div>
+  </div>
+
+  <script type="module" src="connections.js"></script>
 </body>
 </html>

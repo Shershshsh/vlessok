@@ -896,6 +896,7 @@ window.addEventListener('DOMContentLoaded', () => {
       catch (e) { addLog(`❌ Ошибка: ${e}`, 'error'); }
     });
     bindEvent(btnResetNetwork, 'click', async () => {
+      if (!confirm('Вы уверены, что хотите сбросить настройки сети? Это может кратковременно прервать соединение.')) return;
       addLog('🔄 Сбрасываем сетевые настройки...', 'info');
       try {
         const res = await invoke('reset_network');

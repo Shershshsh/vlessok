@@ -224,7 +224,7 @@ async fn open_connections_window(app: tauri::AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("/connections.html".into())
     )
     .title("Монитор соединений")
-    .inner_size(800.0, 600.0)
+    .inner_size(800.0, 700.0)
     .min_inner_size(600.0, 400.0)
     .build()
     .map_err(|e| format!("Ошибка создания окна: {}", e))?;
@@ -568,9 +568,11 @@ pub fn run() {
         // Обработка закрытия окна (Уровень 1 защиты)
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                log::info!("Окно закрывается, останавливаем sing-box...");
-                if let Ok(manager) = window.state::<AppState>().inner().manager.lock() {
-                    let _ = manager.stop();
+                if window.label() == "main" {
+                    log::info!("Основное окно закрывается, останавливаем sing-box...");
+                    if let Ok(manager) = window.state::<AppState>().inner().manager.lock() {
+                        let _ = manager.stop();
+                    }
                 }
             }
         })
