@@ -34,74 +34,78 @@ function getProcessName(path) {
 }
 
 function renderTable() {
-  const pFilter = filterProcess.value.toLowerCase();
-  const dFilter = filterDomain.value.toLowerCase();
-  const tFilter = filterType.value;
+  try {
+    const pFilter = filterProcess.value.toLowerCase();
+    const dFilter = filterDomain.value.toLowerCase();
+    const tFilter = filterType.value;
 
-  tableBody.innerHTML = '';
+    tableBody.innerHTML = '';
 
-  const filtered = currentConnections.filter(c => {
-    const process = getProcessName(c.metadata?.processPath).toLowerCase();
-    const host = (c.metadata?.host || c.metadata?.destinationIP || '').toLowerCase();
-    const route = (c.chains && c.chains.length > 0 ? c.chains[0] : 'unknown').toLowerCase();
+    const filtered = currentConnections.filter(c => {
+      const process = getProcessName(c.metadata?.processPath).toLowerCase();
+      const host = (c.metadata?.host || c.metadata?.destinationIP || '').toLowerCase();
+      const route = (c.chains && c.chains.length > 0 ? c.chains[0] : 'unknown').toLowerCase();
 
-    if (pFilter && !process.includes(pFilter)) return false;
-    if (dFilter && !host.includes(dFilter)) return false;
-    if (tFilter !== 'all' && !route.includes(tFilter)) return false;
-    
-    return true;
-  });
+      if (pFilter && !process.includes(pFilter)) return false;
+      if (dFilter && !host.includes(dFilter)) return false;
+      if (tFilter !== 'all' && !route.includes(tFilter)) return false;
+      
+      return true;
+    });
 
-  filtered.forEach(c => {
-    const tr = document.createElement('tr');
-    
-    // Процесс
-    const tdProcess = document.createElement('td');
-    tdProcess.textContent = getProcessName(c.metadata?.processPath);
-    tdProcess.title = c.metadata?.processPath || '';
+    filtered.forEach(c => {
+      const tr = document.createElement('tr');
+      
+      // Процесс
+      const tdProcess = document.createElement('td');
+      tdProcess.textContent = getProcessName(c.metadata?.processPath);
+      tdProcess.title = c.metadata?.processPath || '';
 
-    // Домен / IP
-    const tdDomain = document.createElement('td');
-    let hostStr = c.metadata?.host || '';
-    if (c.metadata?.destinationIP) {
-      hostStr += hostStr ? ` (${c.metadata.destinationIP})` : c.metadata.destinationIP;
-    }
-    tdDomain.textContent = hostStr || 'Неизвестно';
+      // Домен / IP
+      const tdDomain = document.createElement('td');
+      let hostStr = c.metadata?.host || '';
+      if (c.metadata?.destinationIP) {
+        hostStr += hostStr ? ` (${c.metadata.destinationIP})` : c.metadata.destinationIP;
+      }
+      tdDomain.textContent = hostStr || 'Неизвестно';
 
-    // Маршрут (цепочка)
-    const tdRoute = document.createElement('td');
-    const routeName = c.chains && c.chains.length > 0 ? c.chains[0] : 'direct';
-    tdRoute.textContent = routeName.toUpperCase();
-    if (routeName.includes('proxy') || routeName.includes('vless')) {
-      tdRoute.className = 'route-proxy';
-    } else if (routeName.includes('block')) {
-      tdRoute.className = 'route-block';
-    } else {
-      tdRoute.className = 'route-direct';
-    }
+      // Маршрут (цепочка)
+      const tdRoute = document.createElement('td');
+      const routeName = c.chains && c.chains.length > 0 ? c.chains[0] : 'direct';
+      tdRoute.textContent = routeName.toUpperCase();
+      if (routeName.includes('proxy') || routeName.includes('vless')) {
+        tdRoute.className = 'route-proxy';
+      } else if (routeName.includes('block')) {
+        tdRoute.className = 'route-block';
+      } else {
+        tdRoute.className = 'route-direct';
+      }
 
-    // Правило
-    const tdRule = document.createElement('td');
-    tdRule.textContent = c.rule || '-';
+      // Правило
+      const tdRule = document.createElement('td');
+      tdRule.textContent = c.rule || '-';
 
-    // Трафик
-    const tdTraffic = document.createElement('td');
-    tdTraffic.className = 'traffic';
-    tdTraffic.textContent = `↓${formatBytes(c.download)} / ↑${formatBytes(c.upload)}`;
+      // Трафик
+      const tdTraffic = document.createElement('td');
+      tdTraffic.className = 'traffic';
+      tdTraffic.textContent = `↓${formatBytes(c.download || 0)} / ↑${formatBytes(c.upload || 0)}`;
 
-    // Время
-    const tdTime = document.createElement('td');
-    tdTime.textContent = formatTime(c.start);
+      // Время
+      const tdTime = document.createElement('td');
+      tdTime.textContent = c.start ? formatTime(c.start) : '-';
 
-    tr.appendChild(tdProcess);
-    tr.appendChild(tdDomain);
-    tr.appendChild(tdRoute);
-    tr.appendChild(tdRule);
-    tr.appendChild(tdTraffic);
-    tr.appendChild(tdTime);
-    
-    tableBody.appendChild(tr);
-  });
+      tr.appendChild(tdProcess);
+      tr.appendChild(tdDomain);
+      tr.appendChild(tdRoute);
+      tr.appendChild(tdRule);
+      tr.appendChild(tdTraffic);
+      tr.appendChild(tdTime);
+      
+      tableBody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Ошибка в renderTable:", err);
+  }
 }
 
 function connectWebSocket() {

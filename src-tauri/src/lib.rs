@@ -208,7 +208,7 @@ fn check_ping(url: String) -> Result<u64, String> {
 }
 
 #[tauri::command]
-fn open_connections_window(app: tauri::AppHandle) -> Result<(), String> {
+async fn open_connections_window(app: tauri::AppHandle) -> Result<(), String> {
     log::info!("Открытие окна мониторинга соединений");
     
     // Если окно уже существует, просто фокусируемся на нем
@@ -221,7 +221,7 @@ fn open_connections_window(app: tauri::AppHandle) -> Result<(), String> {
     tauri::WebviewWindowBuilder::new(
         &app,
         "connections",
-        tauri::WebviewUrl::App("connections.html".into())
+        tauri::WebviewUrl::App("/connections.html".into())
     )
     .title("Монитор соединений")
     .inner_size(800.0, 600.0)

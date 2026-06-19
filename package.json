@@ -1,7 +1,8 @@
 {
   "name": "vlessok",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.7",
+  "description": "",
   "type": "module",
   "scripts": {
     "tauri": "tauri"

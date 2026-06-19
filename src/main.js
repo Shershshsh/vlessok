@@ -11,7 +11,14 @@ const { listen } = window.__TAURI__.event;
 const dialog = window.__TAURI__.plugin?.dialog || window.__TAURI__.dialog;
 
 listen('singbox-error', (event) => {
-  addLog(`❌ [SingBox]: ${event.payload}`, 'error');
+  let msg = event.payload || '';
+  // Убираем ANSI цветовые коды
+  msg = msg.replace(/\x1B\[[0-9;]*[mG]/g, '');
+  // Фильтруем некритичные ошибки (таймауты DNS, обычные обрывы отдельных соединений)
+  const ignored = ['dns: exchange failed', 'i/o timeout', 'wsarecv:', 'aborted by the software', 'connection attempt failed'];
+  if (ignored.some(err => msg.includes(err))) return;
+  
+  addLog(`❌ [SingBox]: ${msg}`, 'error');
 });
 
 // ============================================================
