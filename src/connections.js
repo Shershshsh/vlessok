@@ -11,6 +11,7 @@ let sortState = {
   process: 'none'
 };
 let currentSort = 'time';
+const globalUniqueProcesses = new Set();
 
 const listContainer = document.getElementById('connections-list');
 const filterProcess = document.getElementById('filter-process');
@@ -52,14 +53,13 @@ function isSystemProcess(name) {
 
 // Обновление Select (вместо Datalist)
 function updateProcessSelect() {
-  const uniqueProcesses = new Set();
   currentConnections.forEach(c => {
-    uniqueProcesses.add(getProcessName(c.metadata?.processPath));
+    globalUniqueProcesses.add(getProcessName(c.metadata?.processPath));
   });
   
   processDatalist.innerHTML = '';
   
-  Array.from(uniqueProcesses).sort().forEach(proc => {
+  Array.from(globalUniqueProcesses).sort().forEach(proc => {
     const option = document.createElement('option');
     option.value = proc;
     processDatalist.appendChild(option);
@@ -165,9 +165,34 @@ function renderList() {
     });
     activeCountSpan.innerHTML = `<span style="color: var(--vpn-color);">VPN: ${proxyCount}</span> <span style="color: var(--border);">|</span> <span style="color: var(--direct-color);">DIRECT: ${directCount}</span>`;
 
+    // Группировка дублей
+    const groupedMap = new Map();
+    filtered.forEach(c => {
+      const processName = getProcessName(c.metadata?.processPath);
+      const hostStr = c.metadata?.host || c.metadata?.destinationIP || 'Неизвестно';
+      const port = c.metadata?.destinationPort ? `:${c.metadata.destinationPort}` : '';
+      const routeName = c.chains && c.chains.length > 0 ? c.chains[0] : 'direct';
+      const rule = c.rule || '';
+      const netType = c.metadata?.network ? c.metadata.network.toUpperCase() : 'TCP';
+      
+      const key = `${processName}|${hostStr}${port}|${routeName}|${rule}|${netType}`;
+      if (groupedMap.has(key)) {
+        const existing = groupedMap.get(key);
+        existing.download = (existing.download || 0) + (c.download || 0);
+        existing.upload = (existing.upload || 0) + (c.upload || 0);
+        if (new Date(c.start).getTime() < new Date(existing.start).getTime()) {
+          existing.start = c.start;
+        }
+      } else {
+        groupedMap.set(key, { ...c });
+      }
+    });
+
+    const groupedFiltered = Array.from(groupedMap.values());
+
     listContainer.innerHTML = '';
 
-    filtered.forEach(c => {
+    groupedFiltered.forEach(c => {
       const card = document.createElement('div');
       card.className = 'conn-card';
 
