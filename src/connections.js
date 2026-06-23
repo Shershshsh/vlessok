@@ -14,6 +14,7 @@ let currentSort = 'time';
 
 const listContainer = document.getElementById('connections-list');
 const filterProcess = document.getElementById('filter-process');
+const processDatalist = document.getElementById('process-list-datalist');
 const filterDomain = document.getElementById('filter-domain');
 const filterRoute = document.getElementById('filter-route');
 const activeCountSpan = document.getElementById('active-count');
@@ -53,31 +54,16 @@ function isSystemProcess(name) {
 function updateProcessSelect() {
   const uniqueProcesses = new Set();
   currentConnections.forEach(c => {
-    // Не добавляем системные процессы в фильтр для чистоты, или добавляем все? Добавим все.
     uniqueProcesses.add(getProcessName(c.metadata?.processPath));
   });
   
-  const currentVal = filterProcess.value;
-  filterProcess.innerHTML = '<option value="">Все процессы</option>';
+  processDatalist.innerHTML = '';
   
   Array.from(uniqueProcesses).sort().forEach(proc => {
     const option = document.createElement('option');
     option.value = proc;
-    option.textContent = proc;
-    filterProcess.appendChild(option);
+    processDatalist.appendChild(option);
   });
-  
-  // Восстанавливаем выбор, если он все еще актуален
-  if (currentVal && uniqueProcesses.has(currentVal)) {
-    filterProcess.value = currentVal;
-  } else if (currentVal) {
-    // Если процесс закрылся, оставляем его в списке искусственно, чтобы фильтр не сбрасывался сам по себе
-    const option = document.createElement('option');
-    option.value = currentVal;
-    option.textContent = currentVal;
-    filterProcess.appendChild(option);
-    filterProcess.value = currentVal;
-  }
 }
 
 // Обновление UI кнопок сортировки
@@ -257,40 +243,30 @@ function renderList() {
   }
 }
 
-function connectWebSocket() {
-  ws = new WebSocket('ws://127.0.0.1:9090/connections');
-  
-  ws.onopen = () => {
-    console.log('Подключено к sing-box API');
-  };
+let pollingInterval = null;
 
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data && Array.isArray(data.connections)) {
-        currentConnections = data.connections;
-        renderList();
-      }
-    } catch (err) {
-      console.error('Ошибка парсинга:', err);
+async function fetchConnections() {
+  try {
+    const res = await fetch('http://127.0.0.1:9090/connections');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && Array.isArray(data.connections)) {
+      currentConnections = data.connections;
+      renderList();
     }
-  };
+  } catch (err) {
+    // silently ignore fetch errors to avoid spamming console
+  }
+}
 
-  ws.onclose = () => {
-    console.log('Отключено. Переподключение через 3 секунды...');
-    currentConnections = [];
-    renderList();
-    setTimeout(connectWebSocket, 3000);
-  };
-  
-  ws.onerror = (err) => {
-    console.error('WebSocket ошибка:', err);
-    ws.close();
-  };
+function startPolling() {
+  fetchConnections(); // fetch immediately
+  if (pollingInterval) clearInterval(pollingInterval);
+  pollingInterval = setInterval(fetchConnections, 1000); // 1 sec interval
 }
 
 // Слушатели фильтров
-filterProcess.addEventListener('change', renderList);
+filterProcess.addEventListener('input', renderList);
 filterDomain.addEventListener('input', renderList);
 filterRoute.addEventListener('change', renderList);
 
@@ -317,4 +293,4 @@ sortBtns.forEach(btn => {
 });
 
 // Запуск
-connectWebSocket();
+startPolling();

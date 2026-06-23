@@ -295,7 +295,13 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
         // rule_sets хранит источники внешних списков (SRS или локальные JSON)
         let mut rule_sets = vec![];
         
-        // --- 0. Блокировка рекламы (category-ads-all) ---
+        // --- 0. Исключения (Whitelist) перед блокировкой рекламы ---
+        route_rules.push(json!({
+            "domain_keyword": ["yandex", "metrika", "yastatic"],
+            "outbound": "direct"
+        }));
+
+        // --- 0.1 Блокировка рекламы (category-ads-all) ---
         rule_sets.push(json!({
             "tag": "geosite-category-ads-all",
             "type": "remote",
@@ -367,6 +373,10 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "download_detour": "proxy"
                             }));
                             proxy_tags.push("geosite-telegram".to_string());
+                            route_rules.push(json!({
+                                "process_name": ["telegram.exe", "Telegram.exe", "tg.exe", "tdata.exe"],
+                                "outbound": "proxy"
+                            }));
                             continue;
                         }
 
@@ -380,6 +390,10 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "download_detour": "proxy"
                             }));
                             proxy_tags.push("geosite-discord".to_string());
+                            route_rules.push(json!({
+                                "process_name": ["discord.exe", "Discord.exe", "Update.exe"],
+                                "outbound": "proxy"
+                            }));
                             continue;
                         }
 

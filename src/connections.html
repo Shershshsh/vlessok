@@ -20,9 +20,8 @@
         <input type="text" id="filter-domain" placeholder="Поиск по домену/IP..." />
       </div>
       <div class="search-box">
-        <select id="filter-process">
-          <option value="">Все процессы</option>
-        </select>
+        <input type="text" id="filter-process" list="process-list-datalist" placeholder="Все процессы" style="width: 150px;" autocomplete="off" />
+        <datalist id="process-list-datalist"></datalist>
       </div>
       <div class="search-box route-filter-box">
         <select id="filter-route">
