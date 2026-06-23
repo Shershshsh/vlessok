@@ -53,9 +53,16 @@ function isSystemProcess(name) {
 
 // Обновление Select (вместо Datalist)
 function updateProcessSelect() {
+  let changed = false;
   currentConnections.forEach(c => {
-    globalUniqueProcesses.add(getProcessName(c.metadata?.processPath));
+    const proc = getProcessName(c.metadata?.processPath);
+    if (!globalUniqueProcesses.has(proc)) {
+      globalUniqueProcesses.add(proc);
+      changed = true;
+    }
   });
+
+  if (!changed) return;
   
   const currentVal = filterProcess.value;
   filterProcess.innerHTML = '<option value="">Все процессы</option>';
@@ -102,9 +109,7 @@ function renderList() {
     const dFilter = filterDomain.value.toLowerCase();
     const rFilter = filterRoute.value;
 
-    if (document.activeElement !== filterProcess) {
-        updateProcessSelect();
-    }
+    updateProcessSelect();
 
     let filtered = currentConnections.filter(c => {
       // Игнорируем DNS (порт 53)
