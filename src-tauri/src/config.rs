@@ -149,6 +149,11 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
             "timestamp": true
         },
         "experimental": {
+            "cache_file": {
+                "enabled": true,
+                "path": app_data_dir.join("cache.db").to_string_lossy().replace('\\', "/"),
+                "store_rdrc": true
+            },
             "clash_api": {
                 "external_controller": "127.0.0.1:9090",
                 "default_mode": "rule"
