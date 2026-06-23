@@ -57,13 +57,19 @@ function updateProcessSelect() {
     globalUniqueProcesses.add(getProcessName(c.metadata?.processPath));
   });
   
-  processDatalist.innerHTML = '';
+  const currentVal = filterProcess.value;
+  filterProcess.innerHTML = '<option value="">Все процессы</option>';
   
   Array.from(globalUniqueProcesses).sort().forEach(proc => {
     const option = document.createElement('option');
     option.value = proc;
-    processDatalist.appendChild(option);
+    option.textContent = proc;
+    filterProcess.appendChild(option);
   });
+  
+  if (currentVal) {
+    filterProcess.value = currentVal;
+  }
 }
 
 // Обновление UI кнопок сортировки
