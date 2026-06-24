@@ -38,7 +38,6 @@ struct AppState {
 #[tauri::command]
 fn connect_vless(
     url: String,
-    debug_mode: bool,
     state: State<'_, AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
@@ -53,7 +52,7 @@ fn connect_vless(
     };
 
     // Шаг 1: Парсим VLESS-URL и генерируем JSON-конфиг
-    let config_json = config::vless_url_to_singbox_config(&url, Some(&rules), debug_mode, &app_data_dir)
+    let config_json = config::vless_url_to_singbox_config(&url, Some(&rules), &app_data_dir)
         .map_err(|e| format!("Ошибка парсинга VLESS: {}", e))?;
 
     log::info!("Конфиг sing-box сгенерирован");
@@ -99,6 +98,20 @@ fn is_connected(state: State<'_, AppState>, app: tauri::AppHandle) -> bool {
 #[tauri::command]
 fn is_admin() -> bool {
     crate::platform::windows::is_elevated()
+}
+
+#[tauri::command]
+fn set_debug_logging(enabled: bool) {
+    let logs_dir = std::path::Path::new("logs");
+    if !logs_dir.exists() {
+        let _ = std::fs::create_dir_all(logs_dir);
+    }
+    let marker = logs_dir.join("debug.enabled");
+    if enabled {
+        let _ = std::fs::File::create(marker);
+    } else {
+        let _ = std::fs::remove_file(marker);
+    }
 }
 
 #[tauri::command]
@@ -520,15 +533,22 @@ pub fn run() {
     }
 
     // Формируем имя файла с датой и временем
-    let now = chrono::Local::now();
-    let log_filename = format!("logs/vlessok_{}.log", now.format("%Y%m%d_%H%M%S"));
+    let debug_enabled = logs_dir.join("debug.enabled").exists();
 
-    if let Ok(log_file) = std::fs::File::create(&log_filename) {
-        env_logger::Builder::from_env(
-            env_logger::Env::default().default_filter_or("debug")
-        )
-        .target(env_logger::Target::Pipe(Box::new(log_file)))
-        .init();
+    if debug_enabled {
+        let now = chrono::Local::now();
+        let log_filename = format!("logs/vlessok_{}.log", now.format("%Y%m%d_%H%M%S"));
+        if let Ok(log_file) = std::fs::File::create(&log_filename) {
+            env_logger::Builder::from_env(
+                env_logger::Env::default().default_filter_or("debug")
+            )
+            .target(env_logger::Target::Pipe(Box::new(log_file)))
+            .init();
+        } else {
+            env_logger::Builder::from_env(
+                env_logger::Env::default().default_filter_or("debug")
+            ).init();
+        }
     } else {
         env_logger::Builder::from_env(
             env_logger::Env::default().default_filter_or("debug")
@@ -585,6 +605,7 @@ pub fn run() {
             disconnect,
             is_connected,
             is_admin,
+            set_debug_logging,
             relaunch_as_admin,
             apply_dns_leak_fix,
             reset_network,
@@ -606,3 +627,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("Ошибка при запуске приложения vlessok");
 }
+

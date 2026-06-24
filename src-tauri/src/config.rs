@@ -12,7 +12,7 @@ use crate::routing::{RoutingMode, RoutingRules};
 use std::path::Path;
 
 /// Основная функция: парсит VLESS-URL и генерирует JSON-конфиг для sing-box.
-pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&RoutingRules>, debug_mode: bool, app_data_dir: &Path) -> Result<String, String> {
+pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&RoutingRules>, app_data_dir: &Path) -> Result<String, String> {
     // Обрезаем пробелы по краям — пользователь мог случайно скопировать с пробелом
     let raw_url = url_str.trim();
 
@@ -144,7 +144,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
     let mut config = json!({
         "log": {
             "disabled": false,
-            "level": if debug_mode { "debug" } else { "warn" },
+            "level": "info",
             "timestamp": true
         },
         "experimental": {
@@ -540,5 +540,6 @@ mod tests {
         assert!(result.is_err(), "URL с невалидным UUID должен возвращать ошибку");
     }
 }
+
 
 

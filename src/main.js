@@ -373,7 +373,7 @@ async function handleConnect() {
   addLog('🌐 Создаём TUN-интерфейс...', 'info');
 
   try {
-    const result = await invoke('connect_vless', { url, debugMode: checkboxDebug ? checkboxDebug.checked : false });
+    const result = await invoke('connect_vless', { url });
     if (result === 'connected') {
       setConnected();
       
@@ -847,10 +847,16 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (checkboxDebug) {
       checkboxDebug.checked = localStorage.getItem('vlessok_debug_mode') === 'true';
-      checkboxDebug.addEventListener('change', (e) => {
-        localStorage.setItem('vlessok_debug_mode', e.target.checked);
-        if (btnDisconnect && !btnDisconnect.disabled) {
-          addLog('ℹ Изменение режима дебага применится при следующем подключении.', 'info');
+      invoke('set_debug_logging', { enabled: checkboxDebug.checked }).catch(console.error);
+
+      checkboxDebug.addEventListener('change', async (e) => {
+        const isChecked = e.target.checked;
+        localStorage.setItem('vlessok_debug_mode', isChecked);
+        try {
+          await invoke('set_debug_logging', { enabled: isChecked });
+          addLog(isChecked ? 'ℹ Файловые дебаг-логи включены (потребуется перезапуск приложения для применения).' : 'ℹ Файловые дебаг-логи выключены (потребуется перезапуск приложения для применения).', 'info');
+        } catch(err) {
+          console.error(err);
         }
       });
     }
@@ -991,3 +997,4 @@ window.addEventListener('DOMContentLoaded', () => {
     if (logOutput) addLog(`❌ Ошибка UI: ${err.message}`, 'error');
   }
 });
+
