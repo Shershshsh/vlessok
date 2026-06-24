@@ -12,7 +12,7 @@ use crate::routing::{RoutingMode, RoutingRules};
 use std::path::Path;
 
 /// Основная функция: парсит VLESS-URL и генерирует JSON-конфиг для sing-box.
-pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&RoutingRules>, app_data_dir: &Path) -> Result<String, String> {
+pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&RoutingRules>, debug_mode: bool, app_data_dir: &Path) -> Result<String, String> {
     // Обрезаем пробелы по краям — пользователь мог случайно скопировать с пробелом
     let raw_url = url_str.trim();
 
@@ -141,18 +141,23 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
     // domain_resolver нужен для DNS-резолвинга в TUN-режиме
     let direct_outbound = json!({ "type": "direct", "tag": "direct", "domain_resolver": "local-dns" });
 
-    // Базовый конфиг (одинаковый для всех режимов)
     let mut config = json!({
         "log": {
             "disabled": false,
-            "level": "info",
+            "level": if debug_mode { "debug" } else { "warn" },
             "timestamp": true
         },
+        "http_clients": [
+            {
+                "tag": "proxy-downloader",
+                "detour": "proxy"
+            }
+        ],
         "experimental": {
             "cache_file": {
                 "enabled": true,
                 "path": app_data_dir.join("cache.db").to_string_lossy().replace('\\', "/"),
-                "store_rdrc": true
+                "store_dns": true
             },
             "clash_api": {
                 "external_controller": "127.0.0.1:9090",
@@ -161,11 +166,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
         },
         "outbounds": [
             vless_outbound,
-            direct_outbound,
-            {
-                "type": "block",
-                "tag": "block"
-            }
+            direct_outbound
         ]
     });
 
@@ -312,11 +313,11 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
             "type": "remote",
             "format": "binary",
             "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-            "download_detour": "proxy"
+            "http_client": "proxy-downloader"
         }));
         route_rules.push(json!({
             "rule_set": ["geosite-category-ads-all"],
-            "outbound": "block"
+            "action": "reject"
         }));
         
         // --- 1. Обязательный outside-pack (всегда идёт напрямую) ---
@@ -375,7 +376,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "type": "remote",
                                 "format": "binary",
                                 "url": url_domain,
-                                "download_detour": "proxy"
+                                "http_client": "proxy-downloader"
                             }));
                             proxy_tags.push("geosite-telegram".to_string());
                             route_rules.push(json!({
@@ -392,7 +393,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "type": "remote",
                                 "format": "binary",
                                 "url": url_domain,
-                                "download_detour": "proxy"
+                                "http_client": "proxy-downloader"
                             }));
                             proxy_tags.push("geosite-discord".to_string());
                             route_rules.push(json!({
@@ -420,7 +421,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                             "type": "remote",
                             "format": "binary",
                             "url": url,
-                            "download_detour": "proxy"
+                            "http_client": "proxy-downloader"
                         }));
                     }
                     if !proxy_tags.is_empty() {

@@ -73,6 +73,7 @@ let inputProcess;
 let btnAddProcess;
 let btnPickProcess;
 let listProcesses;
+let checkboxDebug;
 
 let statusPollTimer = null;
 
@@ -372,7 +373,7 @@ async function handleConnect() {
   addLog('🌐 Создаём TUN-интерфейс...', 'info');
 
   try {
-    const result = await invoke('connect_vless', { url });
+    const result = await invoke('connect_vless', { url, debugMode: checkboxDebug ? checkboxDebug.checked : false });
     if (result === 'connected') {
       setConnected();
       
@@ -841,6 +842,18 @@ window.addEventListener('DOMContentLoaded', () => {
     btnAddProcess  = getEl('btn-add-process');
     btnPickProcess = getEl('btn-pick-process');
     listProcesses  = getEl('list-processes');
+
+    checkboxDebug    = getEl('checkbox-debug');
+
+    if (checkboxDebug) {
+      checkboxDebug.checked = localStorage.getItem('vlessok_debug_mode') === 'true';
+      checkboxDebug.addEventListener('change', (e) => {
+        localStorage.setItem('vlessok_debug_mode', e.target.checked);
+        if (btnDisconnect && !btnDisconnect.disabled) {
+          addLog('ℹ Изменение режима дебага применится при следующем подключении.', 'info');
+        }
+      });
+    }
 
     // Профили
     loadProfiles();

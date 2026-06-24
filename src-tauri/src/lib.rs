@@ -38,6 +38,7 @@ struct AppState {
 #[tauri::command]
 fn connect_vless(
     url: String,
+    debug_mode: bool,
     state: State<'_, AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
@@ -52,7 +53,7 @@ fn connect_vless(
     };
 
     // Шаг 1: Парсим VLESS-URL и генерируем JSON-конфиг
-    let config_json = config::vless_url_to_singbox_config(&url, Some(&rules), &app_data_dir)
+    let config_json = config::vless_url_to_singbox_config(&url, Some(&rules), debug_mode, &app_data_dir)
         .map_err(|e| format!("Ошибка парсинга VLESS: {}", e))?;
 
     log::info!("Конфиг sing-box сгенерирован");
