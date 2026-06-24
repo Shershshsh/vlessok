@@ -147,17 +147,11 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
             "level": if debug_mode { "debug" } else { "warn" },
             "timestamp": true
         },
-        "http_clients": [
-            {
-                "tag": "proxy-downloader",
-                "detour": "proxy"
-            }
-        ],
         "experimental": {
             "cache_file": {
                 "enabled": true,
                 "path": app_data_dir.join("cache.db").to_string_lossy().replace('\\', "/"),
-                "store_dns": true
+                "store_rdrc": true
             },
             "clash_api": {
                 "external_controller": "127.0.0.1:9090",
@@ -313,7 +307,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
             "type": "remote",
             "format": "binary",
             "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-            "http_client": "proxy-downloader"
+            "download_detour": "proxy"
         }));
         route_rules.push(json!({
             "rule_set": ["geosite-category-ads-all"],
@@ -376,7 +370,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "type": "remote",
                                 "format": "binary",
                                 "url": url_domain,
-                                "http_client": "proxy-downloader"
+                                "download_detour": "proxy"
                             }));
                             proxy_tags.push("geosite-telegram".to_string());
                             route_rules.push(json!({
@@ -393,7 +387,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                                 "type": "remote",
                                 "format": "binary",
                                 "url": url_domain,
-                                "http_client": "proxy-downloader"
+                                "download_detour": "proxy"
                             }));
                             proxy_tags.push("geosite-discord".to_string());
                             route_rules.push(json!({
@@ -421,7 +415,7 @@ pub fn vless_url_to_singbox_config(url_str: &str, routing_rules: Option<&Routing
                             "type": "remote",
                             "format": "binary",
                             "url": url,
-                            "http_client": "proxy-downloader"
+                            "download_detour": "proxy"
                         }));
                     }
                     if !proxy_tags.is_empty() {
@@ -546,3 +540,5 @@ mod tests {
         assert!(result.is_err(), "URL с невалидным UUID должен возвращать ошибку");
     }
 }
+
+
