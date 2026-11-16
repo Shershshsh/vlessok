@@ -2,7 +2,7 @@
 
 Минималистичный и мощный VPN-клиент для Windows на базе **Tauri** и движка **sing-box**.
 
-Протокол: **VLESS + Reality + Vision**  
+Протоколы: **VLESS (Reality + Vision, XHTTP/SplitHTTP, WS, gRPC)**, **Hysteria 1 / Hysteria 2**  
 Режим работы: Системный **TUN**-туннель (полный перехват трафика на сетевом уровне).
 
 ---
@@ -59,8 +59,9 @@
 
 ### 1. Скачайте зависимости ядра
 Для работы бэкенда в папке `src-tauri/binaries/` должны находиться:
-1. `sing-box.exe` (версии 1.10+).
+1. `sing-box.exe` (версии 1.13+).
 2. `wintun.dll` (драйвер TUN-интерфейса).
+3. `xray.exe` (версии 26.10.21+ из [релизов XTLS/Xray-core](https://github.com/XTLS/Xray-core/releases) — архив `Xray-windows-64.zip`, нужен для поддержки VLESS + XHTTP / SplitHTTP).
 
 *Они занесены в `.gitignore` и не попадают в репозиторий.*
 

@@ -21,6 +21,12 @@ listen('singbox-error', (event) => {
   addLog(`❌ [SingBox]: ${msg}`, 'error');
 });
 
+listen('xray-error', (event) => {
+  let msg = (event.payload || '').replace(/\x1B\[[0-9;]*[mG]/g, '').trim();
+  if (!msg) return;
+  addLog(`❌ [Xray]: ${msg}`, 'error');
+});
+
 // ============================================================
 // Ссылки на DOM-элементы
 // ============================================================
@@ -76,6 +82,7 @@ let listProcesses;
 let checkboxDebug;
 
 let statusPollTimer = null;
+let isReconnecting = false;
 
 // Глобальный стейт правил (синхронизируется с Rust)
 let currentRules = {
@@ -224,11 +231,17 @@ function closeProfileModal() {
   editingProfileId = null;
 }
 
+function isValidProxyUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const u = url.trim().toLowerCase();
+  return u.startsWith('vless://') || u.startsWith('hysteria2://') || u.startsWith('hy2://') || u.startsWith('hysteria://');
+}
+
 function saveProfile() {
   const name = profileNameInput.value.trim();
   const url = profileUrlInput.value.trim();
-  if (!url || !url.startsWith('vless://')) {
-    addLog('❌ Ошибка: Укажите корректную vless:// ссылку', 'error');
+  if (!isValidProxyUrl(url)) {
+    addLog('❌ Ошибка: Поддерживаются vless://, hysteria2://, hy2:// и hysteria:// ссылки', 'error');
     return;
   }
   
@@ -316,7 +329,7 @@ function setDisconnected() {
 function setConnecting() {
   if (statusDot) statusDot.className = 'status-dot connecting';
   if (statusText) {
-    statusText.textContent = 'ПОДКЛЮЧЕНО';
+    statusText.textContent = 'ПОДКЛЮЧЕНИЕ...';
     statusText.style.color = '#f39c12';
   }
   if (btnConnect) btnConnect.disabled = true;
@@ -324,8 +337,10 @@ function setConnecting() {
 }
 
 async function pollStatus() {
+  if (isReconnecting) return;
   try {
     const running = await invoke('is_connected');
+    if (isReconnecting) return;
     if (running && statusText && statusText.textContent !== 'ПОДКЛЮЧЕНО') {
       setConnected();
     } else if (!running && statusText && statusText.textContent !== 'ОТКЛЮЧЕНО' && statusText.textContent !== 'ПОДКЛЮЧЕНИЕ...') {
@@ -350,15 +365,23 @@ async function doCheckPing(url) {
   }
 }
 
+function extractHostname(rawUrl) {
+  const normalized = (rawUrl || '').trim().replace(
+    /^([a-z0-9+.-]+:\/\/(?:[^/?#@]*@)?(?:\[[^\]]+\]|[^/:?#]+)):(\d+[-,][^/?#]+)/i,
+    '$1:443'
+  );
+  return new URL(normalized).hostname;
+}
+
 async function handleConnect() {
   const url = getSelectedVlessUrl();
 
   if (!url) {
-    addLog('❌ Выберите или добавьте профиль VLESS', 'error');
+    addLog('❌ Выберите или добавьте профиль подключения', 'error');
     return;
   }
-  if (!url.startsWith('vless://')) {
-    addLog('❌ Ссылка должна начинаться с vless://', 'error');
+  if (!isValidProxyUrl(url)) {
+    addLog('❌ Ссылка должна начинаться с vless://, hysteria2://, hy2:// или hysteria://', 'error');
     return;
   }
 
@@ -377,7 +400,7 @@ async function handleConnect() {
     if (result === 'connected') {
       setConnected();
       
-      addLog('✅ Системный VPN активен. Весь трафик идёт через VLESS-сервер.', 'success');
+      addLog('✅ Системный VPN активен. Весь трафик защищён через прокси-сервер.', 'success');
       const leakFixApplied = localStorage.getItem('dns_leak_fix_applied');
       if (!leakFixApplied) {
         addLog('🛡 Применяю защиту от DNS-leak...', 'info');
@@ -392,7 +415,7 @@ async function handleConnect() {
 
       if (serverNameSpan) {
         try {
-          serverNameSpan.textContent = new URL(url).hostname;
+          serverNameSpan.textContent = extractHostname(url);
         } catch (e) {
           serverNameSpan.textContent = 'Неизвестно';
         }
@@ -554,18 +577,32 @@ function switchTab(tabId) {
 }
 
 async function autoReconnect() {
+  if (isReconnecting) return;
   try {
-    const isConnected = await invoke('is_connected');
-    if (isConnected) {
-      addLog('🔄 Применяем новые правила (перезапуск)...', 'info');
-      await handleDisconnect();
-      
-      // Задержка 1.5 сек перед переподключением, чтобы ОС успела освободить TUN и маршруты
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      await handleConnect();
+    const wasConnected =
+      (statusText && statusText.textContent === 'ПОДКЛЮЧЕНО') ||
+      (await invoke('is_connected'));
+    if (!wasConnected) return;
+
+    isReconnecting = true;
+    addLog('🔄 Применяем новые правила (перезапуск)...', 'info');
+    setConnecting();
+    try {
+      await invoke('disconnect');
+    } catch (discErr) {
+      console.warn('Ошибка при отключении перед переподключением:', discErr);
     }
-  } catch(e) {}
+    setConnecting();
+
+    // Задержка 1.5 сек перед переподключением, чтобы ОС успела освободить TUN и маршруты
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    await handleConnect();
+  } catch (e) {
+    setDisconnected();
+  } finally {
+    isReconnecting = false;
+  }
 }
 
 async function addMultipleRules(text, addCmd, argName) {
@@ -889,7 +926,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (profileUrlInput) {
       bindEvent(profileUrlInput, 'input', () => {
         const val = profileUrlInput.value.trim();
-        if (val.startsWith('vless://') && !profileNameInput.value.trim()) {
+        if (isValidProxyUrl(val) && !profileNameInput.value.trim()) {
           const idx = val.indexOf('#');
           if (idx !== -1) {
             let name = val.substring(idx + 1).trim();
@@ -991,7 +1028,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // Загружаем правила маршрутизации
     loadRoutingRules();
 
-    addLog('Приложение готово. Вставьте VLESS-ссылку и нажмите Подключить.', 'info');
+    addLog('Приложение готово. Вставьте ссылку (VLESS / Hysteria) и нажмите Подключить.', 'info');
   } catch (err) {
     console.error('Критическая ошибка при инициализации UI:', err);
     if (logOutput) addLog(`❌ Ошибка UI: ${err.message}`, 'error');

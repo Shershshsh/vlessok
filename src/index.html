@@ -218,7 +218,7 @@
       </div>
     </div>
 
-    <!-- Модальное окно профиля VLESS -->
+    <!-- Модальное окно профиля подключения -->
     <div id="profile-modal" class="modal-overlay hidden">
       <div class="modal-content" style="max-width: 600px;">
         <h3 id="profile-modal-title">Новый профиль</h3>
@@ -227,11 +227,11 @@
           <input type="text" id="profile-name" class="rule-input" placeholder="Мой сервер">
         </div>
         <div class="input-block">
-          <label class="input-label">VLESS-ссылка</label>
+          <label class="input-label">Ссылка подключения (VLESS / Hysteria)</label>
           <textarea
             id="profile-url"
             class="vless-input"
-            placeholder="vless://UUID@server:port?security=reality&pbk=...&sni=...#Имя"
+            placeholder="vless://, hysteria2://, hy2:// или hysteria:// ссылка"
             rows="4"
             spellcheck="false"
             autocomplete="off"

@@ -8,35 +8,78 @@
 // ============================================================
 
 // Подключаем наши модули
-mod config;   // Парсер VLESS URL → sing-box JSON
+mod config;   // Парсер VLESS / Hysteria / XHTTP URL → JSON
 mod platform; // OS-специфичные утилиты (Job Objects)
 mod singbox;  // Управление процессом sing-box
+mod xray;     // Управление процессом Xray (для XHTTP)
 pub mod routing;
 pub mod russia_pack;
 
 use singbox::SingBoxManager;
+use xray::XrayManager;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::path::PathBuf;
 use tauri::{Manager, State};
 
 // ============================================================
-// Тип для глобального состояния — менеджер sing-box
+// Тип для глобального состояния — менеджеры sing-box и xray
 // Mutex нужен для безопасного доступа из разных команд
 // ============================================================
 struct AppState {
     manager: Mutex<SingBoxManager>,
+    xray_manager: Mutex<XrayManager>,
+    xray_chained: AtomicBool,
     routing_rules: Mutex<routing::RoutingRules>,
     icon_cache: Mutex<std::collections::HashMap<String, String>>,
+}
+
+fn get_free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|l| l.local_addr())
+        .map(|a| a.port())
+        .unwrap_or(10808)
+}
+
+fn wait_for_xray_port(port: u16, timeout: std::time::Duration, xray_manager: &XrayManager) -> Result<(), String> {
+    use std::net::{SocketAddr, TcpStream};
+    let deadline = std::time::Instant::now() + timeout;
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+
+    while std::time::Instant::now() < deadline {
+        if TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(100)).is_ok() {
+            return Ok(());
+        }
+        if !xray_manager.is_running(None) {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            let logs = xray_manager.last_logs();
+            let _ = xray_manager.stop();
+            return Err(if logs.is_empty() {
+                "Xray завершился при старте без вывода".to_string()
+            } else {
+                format!("Xray завершился при старте:\n{}", logs)
+            });
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+
+    let alive = xray_manager.is_running(None);
+    let logs = xray_manager.last_logs();
+    let _ = xray_manager.stop();
+    if alive {
+        Err(format!("Xray не открыл SOCKS-порт {} за {} сек", port, timeout.as_secs()))
+    } else {
+        Err(format!("Xray завершился при старте:\n{}", logs))
+    }
 }
 
 // ============================================================
 // Tauri-команды (вызываются из JavaScript через invoke())
 // ============================================================
 
-/// Подключиться к VPN: парсит VLESS-URL, запускает sing-box.
-/// Вызов из JS: await invoke("connect_vless", { url: "vless://..." })
+/// Подключиться к VPN: парсит URL (VLESS, Hysteria 1/2, XHTTP), запускает ядра.
+/// Вызов из JS: await invoke("connect_vless", { url: "..." })
 #[tauri::command]
-fn connect_vless(
+async fn connect_vless(
     url: String,
     state: State<'_, AppState>,
     app_handle: tauri::AppHandle,
@@ -51,48 +94,122 @@ fn connect_vless(
         rules_lock.clone()
     };
 
-    // Шаг 1: Парсим VLESS-URL и генерируем JSON-конфиг
-    let config_json = config::vless_url_to_singbox_config(&url, Some(&rules), &app_data_dir)
-        .map_err(|e| format!("Ошибка парсинга VLESS: {}", e))?;
+    let socks_port = get_free_port();
 
-    log::info!("Конфиг sing-box сгенерирован");
+    // Шаг 1: Парсим URL и генерируем конфигурацию
+    let proxy_config = config::parse_proxy_url(&url, Some(&rules), &app_data_dir, socks_port)
+        .map_err(|e| format!("Ошибка парсинга конфигурации: {}", e))?;
 
-    // Шаг 2: Запускаем sing-box с этим конфигом
-    let manager = state.manager.lock()
-        .map_err(|e| format!("Внутренняя ошибка (mutex): {}", e))?;
+    match proxy_config {
+        config::ProxyConfig::SingBoxOnly(singbox_json) => {
+            state.xray_chained.store(false, Ordering::SeqCst);
+            {
+                let xray_manager = state.xray_manager.lock()
+                    .map_err(|e| format!("Внутренняя ошибка (xray mutex): {}", e))?;
+                let _ = xray_manager.stop();
+            }
+            log::info!("Конфиг sing-box сгенерирован (Direct sing-box)");
+            let manager = state.manager.lock()
+                .map_err(|e| format!("Внутренняя ошибка (singbox mutex): {}", e))?;
+            manager.start(singbox_json, app_handle.clone())
+                .map_err(|e| format!("Ошибка запуска sing-box: {}", e))?;
+        }
+        config::ProxyConfig::XrayChained { xray_config, singbox_config } => {
+            log::info!("Конфиги сгенерированы: Xray (порт {}) + sing-box chained", socks_port);
+            state.xray_chained.store(false, Ordering::SeqCst);
 
-    let app_handle_clone = app_handle.clone();
-    manager.start(config_json, app_handle_clone)
-        .map_err(|e| format!("Ошибка запуска sing-box: {}", e))?;
+            // Сначала запускаем Xray и ждём порт, не блокируя state.manager
+            {
+                let xray_manager = state.xray_manager.lock()
+                    .map_err(|e| format!("Внутренняя ошибка (xray mutex): {}", e))?;
+                xray_manager.start(xray_config, app_handle.clone())
+                    .map_err(|e| format!("Ошибка запуска Xray: {}", e))?;
+
+                wait_for_xray_port(socks_port, std::time::Duration::from_secs(5), &xray_manager)?;
+            }
+
+            let start_res = {
+                let manager = state.manager.lock()
+                    .map_err(|e| format!("Внутренняя ошибка (singbox mutex): {}", e))?;
+                manager.start(singbox_config, app_handle.clone())
+            };
+
+            if let Err(e) = start_res {
+                if let Ok(xray_manager) = state.xray_manager.lock() {
+                    let _ = xray_manager.stop();
+                }
+                return Err(format!("Ошибка запуска sing-box: {}", e));
+            }
+            state.xray_chained.store(true, Ordering::SeqCst);
+        }
+    }
 
     Ok("connected".to_string())
 }
 
-/// Отключиться от VPN: останавливает sing-box.
+/// Отключиться от VPN: останавливает sing-box и xray.
 /// Вызов из JS: await invoke("disconnect")
 #[tauri::command]
-fn disconnect(state: State<'_, AppState>) -> Result<String, String> {
+async fn disconnect(state: State<'_, AppState>) -> Result<String, String> {
     log::info!("Получена команда disconnect");
 
-    let manager = state.manager.lock()
-        .map_err(|e| format!("Внутренняя ошибка (mutex): {}", e))?;
+    state.xray_chained.store(false, Ordering::SeqCst);
 
-    manager.stop()
-        .map_err(|e| format!("Ошибка остановки sing-box: {}", e))?;
+    let res_sing = {
+        let manager = state.manager.lock()
+            .map_err(|e| format!("Внутренняя ошибка (mutex): {}", e))?;
+        manager.stop()
+    };
+    let res_xray = {
+        let xray_manager = state.xray_manager.lock()
+            .map_err(|e| format!("Внутренняя ошибка (mutex): {}", e))?;
+        xray_manager.stop()
+    };
+
+    if let Err(e) = res_sing {
+        return Err(format!("Ошибка остановки sing-box: {}", e));
+    }
+    if let Err(e) = res_xray {
+        return Err(format!("Ошибка остановки xray: {}", e));
+    }
 
     Ok("disconnected".to_string())
 }
 
-/// Проверить статус: запущен ли sing-box.
+/// Проверить статус: запущен ли sing-box (и xray в chained-режиме).
 /// Вызов из JS: await invoke("is_connected")
 /// Возвращает true/false
 #[tauri::command]
 fn is_connected(state: State<'_, AppState>, app: tauri::AppHandle) -> bool {
-    let manager = match state.manager.lock() {
-        Ok(m) => m,
+    let sb_ok = match state.manager.lock() {
+        Ok(m) => m.is_running(Some(&app)),
         Err(_) => return false,
     };
-    manager.is_running(Some(&app))
+
+    if !sb_ok {
+        if state.xray_chained.swap(false, Ordering::SeqCst) {
+            if let Ok(x) = state.xray_manager.lock() {
+                let _ = x.stop();
+            }
+        }
+        return false;
+    }
+
+    if state.xray_chained.load(Ordering::SeqCst) {
+        let xray_ok = match state.xray_manager.lock() {
+            Ok(x) => x.is_running(Some(&app)),
+            Err(_) => false,
+        };
+        if !xray_ok {
+            state.xray_chained.store(false, Ordering::SeqCst);
+            if let Ok(m) = state.manager.lock() {
+                let _ = m.stop();
+            }
+            return false;
+        }
+    }
+
+    true
 }
 
 #[tauri::command]
@@ -100,11 +217,20 @@ fn is_admin() -> bool {
     crate::platform::windows::is_elevated()
 }
 
+fn resolve_logs_dir() -> std::path::PathBuf {
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            return dir.join("logs");
+        }
+    }
+    std::path::PathBuf::from("logs")
+}
+
 #[tauri::command]
 fn set_debug_logging(enabled: bool) {
-    let logs_dir = std::path::Path::new("logs");
+    let logs_dir = resolve_logs_dir();
     if !logs_dir.exists() {
-        let _ = std::fs::create_dir_all(logs_dir);
+        let _ = std::fs::create_dir_all(&logs_dir);
     }
     let marker = logs_dir.join("debug.enabled");
     if enabled {
@@ -154,9 +280,17 @@ fn apply_dns_leak_fix() -> Result<(), String> {
 }
 
 #[tauri::command]
-fn reset_network() -> Result<String, String> {
+async fn reset_network(state: State<'_, AppState>) -> Result<String, String> {
     log::info!("Сброс сетевых настроек...");
-    
+
+    state.xray_chained.store(false, Ordering::SeqCst);
+    if let Ok(manager) = state.manager.lock() {
+        let _ = manager.stop();
+    }
+    if let Ok(xray_manager) = state.xray_manager.lock() {
+        let _ = xray_manager.stop();
+    }
+
     // 1. Удаляем TUN-интерфейс
     let _ = std::process::Command::new("netsh")
         .args(["interface", "delete", "name=vlessok-tun"])
@@ -179,7 +313,7 @@ fn reset_network() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn get_current_external_ip() -> Result<String, String> {
+async fn get_current_external_ip() -> Result<String, String> {
     let timeout = std::time::Duration::from_secs(3);
     
     // Основной сервис api.ipify.org
@@ -200,25 +334,44 @@ fn get_current_external_ip() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn check_ping(url: String) -> Result<u64, String> {
+async fn check_ping(url: String) -> Result<u64, String> {
     use url::Url;
     use std::net::{TcpStream, ToSocketAddrs};
     use std::time::{Instant, Duration};
 
-    let parsed = Url::parse(&url).map_err(|e| format!("Invalid URL: {}", e))?;
+    let (normalized_url, _) = config::normalize_port_hopping_url(url.trim());
+    let parsed = Url::parse(&normalized_url).map_err(|e| format!("Invalid URL: {}", e))?;
     let host = parsed.host_str().ok_or("No host in URL")?;
-    let port = parsed.port().ok_or("No port in URL")?;
+    let port = parsed.port().unwrap_or(443);
 
     let addr_str = format!("{}:{}", host, port);
     let mut addrs = addr_str.to_socket_addrs().map_err(|e| format!("DNS resolution failed: {}", e))?;
     let addr = addrs.next().ok_or("Could not resolve address")?;
 
     let start = Instant::now();
-    let timeout = Duration::from_secs(3);
-    match TcpStream::connect_timeout(&addr, timeout) {
-        Ok(_) => Ok(start.elapsed().as_millis() as u64),
-        Err(e) => Err(format!("Connection failed: {}", e)),
+    let timeout = Duration::from_millis(2500);
+    if let Ok(_) = TcpStream::connect_timeout(&addr, timeout) {
+        return Ok(start.elapsed().as_millis() as u64);
     }
+
+    // Для UDP-протоколов (Hysteria) TCP порт может быть закрыт, пробуем ICMP пинг
+    let ip_str = addr.ip().to_string();
+    let ping_start = Instant::now();
+    let mut cmd = std::process::Command::new("ping");
+    cmd.args(["-n", "1", "-w", "2000", &ip_str]);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    if let Ok(output) = cmd.output() {
+        if output.status.success() {
+            return Ok(ping_start.elapsed().as_millis() as u64);
+        }
+    }
+
+    Err("Connection failed (TCP & ICMP unreachable)".to_string())
 }
 
 #[tauri::command]
@@ -509,7 +662,7 @@ fn get_process_icons_batched(process_names: Vec<String>, state: State<'_, AppSta
     }
 
     // Для тех, кого PowerShell не смог распарсить, ставим пустую строку в кэш
-    for (path, name) in path_to_name {
+    for (_path, name) in path_to_name {
         if !cache.contains_key(&name) {
             cache.insert(name, "".to_string());
         }
@@ -526,32 +679,30 @@ fn get_process_icons_batched(process_names: Vec<String>, state: State<'_, AppSta
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Создаем директорию logs если её нет
-    let logs_dir = std::path::Path::new("logs");
+    // Создаем директорию logs рядом с exe если её нет
+    let logs_dir = resolve_logs_dir();
     if !logs_dir.exists() {
-        let _ = std::fs::create_dir_all(logs_dir);
+        let _ = std::fs::create_dir_all(&logs_dir);
     }
 
-    // Формируем имя файла с датой и временем
     let debug_enabled = logs_dir.join("debug.enabled").exists();
-
-    if debug_enabled {
+    let log_path = if debug_enabled {
         let now = chrono::Local::now();
-        let log_filename = format!("logs/vlessok_{}.log", now.format("%Y%m%d_%H%M%S"));
-        if let Ok(log_file) = std::fs::File::create(&log_filename) {
-            env_logger::Builder::from_env(
-                env_logger::Env::default().default_filter_or("debug")
-            )
-            .target(env_logger::Target::Pipe(Box::new(log_file)))
-            .init();
-        } else {
-            env_logger::Builder::from_env(
-                env_logger::Env::default().default_filter_or("debug")
-            ).init();
-        }
+        logs_dir.join(format!("vlessok_{}.log", now.format("%Y%m%d_%H%M%S")))
+    } else {
+        logs_dir.join("vlessok_latest.log")
+    };
+    let default_level = if debug_enabled { "debug" } else { "info" };
+
+    if let Ok(log_file) = std::fs::File::create(&log_path) {
+        env_logger::Builder::from_env(
+            env_logger::Env::default().default_filter_or(default_level)
+        )
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
+        .init();
     } else {
         env_logger::Builder::from_env(
-            env_logger::Env::default().default_filter_or("debug")
+            env_logger::Env::default().default_filter_or(default_level)
         ).init();
     }
 
@@ -565,6 +716,8 @@ pub fn run() {
     // Создаём глобальное состояние приложения
     let app_state = AppState {
         manager: Mutex::new(SingBoxManager::new()),
+        xray_manager: Mutex::new(XrayManager::new()),
+        xray_chained: AtomicBool::new(false),
         routing_rules: Mutex::new(routing::RoutingRules::default()),
         icon_cache: Mutex::new(std::collections::HashMap::new()),
     };
@@ -590,10 +743,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if window.label() == "main" {
-                    log::info!("Основное окно закрывается, останавливаем sing-box...");
-                    if let Ok(manager) = window.state::<AppState>().inner().manager.lock() {
-                        let _ = manager.stop();
-                    }
+                    log::info!("Основное окно закрывается, останавливаем sing-box и xray...");
+                    let state = window.state::<AppState>();
+                    let _ = state.manager.lock().map(|m| m.stop());
+                    let _ = state.xray_manager.lock().map(|m| m.stop());
                 }
             }
         })

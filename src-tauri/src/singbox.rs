@@ -209,24 +209,29 @@ impl SingBoxManager {
 
         info!("sing-box запущен, PID: {:?}", child.id());
 
-        // Сохраняем handle процесса и путь к конфигу
+        // Сохраняем handle процесса и путь к конфигу (очищая старый путь, если остался после краша)
         *self.process.lock().unwrap() = Some(child);
-        *self.config_path.lock().unwrap() = Some(config_path_kept);
+        if let Some(old_path) = self.config_path.lock().unwrap().replace(config_path_kept) {
+            if old_path.exists() {
+                let _ = std::fs::remove_file(&old_path);
+            }
+        }
 
         Ok(())
     }
 
     /// Останавливает sing-box.
-    /// Убивает процесс и удаляет временный файл конфига.
+    /// Убивает процесс, чистит TUN-интерфейс и удаляет временный файл конфига.
     pub fn stop(&self) -> Result<(), String> {
         let mut process_guard = self.process.lock().unwrap();
 
         if let Some(mut child) = process_guard.take() {
             info!("Останавливаем sing-box (PID: {:?})", child.id());
 
-            // Убиваем процесс
-            child.kill()
-                .map_err(|e| format!("Не удалось убить процесс sing-box: {}", e))?;
+            // Не прерываем остановку при ошибке kill(): процесс мог уже завершиться сам
+            if let Err(e) = child.kill() {
+                warn!("sing-box уже завершился или не удалось kill(): {}", e);
+            }
 
             // Ждём завершения чтобы не создавать зомби-процесс
             match child.wait() {
@@ -235,6 +240,17 @@ impl SingBoxManager {
             }
         } else {
             info!("sing-box не был запущен, нечего останавливать");
+        }
+
+        // Гарантированно удаляем TUN-интерфейс, чтобы Windows не тормозила при переподключении
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            let _ = Command::new("netsh")
+                .args(["interface", "delete", "name=vlessok-tun"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
         }
 
         // Удаляем временный файл конфига
